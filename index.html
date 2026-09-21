@@ -403,6 +403,13 @@ button{font-family:inherit;}
   cursor:pointer;
   padding:2px 0 10px;
 }
+.list-cat-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:4px;}
+.list-open-btn{
+  border:1.5px solid var(--accent-category);
+  background:transparent;color:var(--accent-category);
+  border-radius:999px;padding:6px 13px;
+  font-size:12px;font-weight:700;cursor:pointer;
+}
 .list-agg-header{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
   margin-bottom:10px;
@@ -574,6 +581,21 @@ button{font-family:inherit;}
   border:1px dashed var(--line);
   background:transparent;color:var(--ink-soft);
   border-radius:999px;padding:5px 12px;font-size:12px;cursor:pointer;
+}
+.mc-pill{
+  border:1.5px solid var(--mc-color, var(--accent-training));
+  color:var(--mc-color, var(--accent-training));
+  background:transparent;
+  border-radius:999px;
+  padding:7px 14px;
+  font-size:12.5px;font-weight:700;cursor:pointer;
+}
+.mc-pill.active{background:var(--mc-color, var(--accent-training));color:#fff;}
+.mc-pill:disabled{opacity:.6;cursor:default;}
+.mc-filter-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;align-items:center;}
+.mc-filter-clear{
+  border:none;background:transparent;color:var(--ink-soft);
+  font-size:12px;text-decoration:underline;cursor:pointer;
 }
 
 .tag-input-wrap{position:relative;flex:1;min-width:120px;}
@@ -889,7 +911,8 @@ var TYPE_META = {
   physiology: { label:'生理学的根拠', cssVar:'--accent-physiology' },
   note:       { label:'メモ',         cssVar:'--accent-note' },
   trainingMethod:  { label:'練習法', cssVar:'--accent-training' },
-  treatmentMethod: { label:'治療法', cssVar:'--accent-treatment' }
+  treatmentMethod: { label:'治療法', cssVar:'--accent-treatment' },
+  classification:  { label:'分類',   cssVar:'--accent-physiology' }
 };
 var MOVEMENT_TYPES = ['movementGood','movementError','movementBoth'];
 var DETAIL_TYPES = ['cause','effect','correction','anatomy','physiology','note'];
@@ -898,7 +921,7 @@ var DETAIL_FIELD_DEFS = [
   { key:'effectText',      label:'影響',       cssVar:'--accent-effect' },
   { key:'correctionText',  label:'対処法',     cssVar:'--accent-correction' }
 ];
-var TYPE_ORDER = MOVEMENT_TYPES.concat(DETAIL_TYPES);
+var TYPE_ORDER = MOVEMENT_TYPES.concat(DETAIL_TYPES).concat(['classification']);
 
 var BRANCH_META = {
   competitive: { label:'競技動作' },
@@ -915,7 +938,7 @@ var LEGACY_ROOT_IDS = ['root-baseball'];
 
 var LEVEL_CHAIN = {
   competitive: ['sport','scene'],
-  general:     ['bodypart','injury','subclass'],
+  general:     ['bodypart','injury'],
   training:    [],
   treatment:   []
 };
@@ -925,11 +948,24 @@ var LEVEL_LABEL = {
 };
 var BRANCH_CONTENT_TYPES = {
   competitive: MOVEMENT_TYPES,
-  general: MOVEMENT_TYPES,
+  general: [],
   training: ['trainingMethod'],
   treatment: ['treatmentMethod']
 };
 var CATEGORY_CSS_VAR = '--accent-category';
+
+var TRAINING_CATEGORIES = [
+  { key:'training', label:'トレーニング' },
+  { key:'exercise', label:'エクササイズ' },
+  { key:'skill',    label:'スキル' }
+];
+var TREATMENT_CATEGORIES = [
+  { key:'acupuncture', label:'鍼灸' },
+  { key:'manual',      label:'徒手療法' },
+  { key:'exercise',    label:'運動療法' },
+  { key:'physical',    label:'物理療法' },
+  { key:'other',       label:'その他' }
+];
 
 var NODE_H_SPACING = 180;
 var NODE_V_SPACING = 148;
@@ -949,6 +985,7 @@ var pendingWrites = {};
 var listState = { branch:'competitive', path:[] };
 var listCreatingLevel = null;
 var listContentCreating = null;
+var listMethodFilter = [];
 var editMode = true;
 try{ var savedEditMode = localStorage.getItem('ema_edit_mode'); if(savedEditMode === '0') editMode = false; }catch(e){}
 var listAggregateId = null;
@@ -1065,10 +1102,13 @@ function nextStepFor(node){
   var chain = LEVEL_CHAIN[branch] || [];
   if(node.kind === 'category'){
     if(node.catLevel === 'branch'){
-      return chain.length ? { kind:'category', level:chain[0] } : { kind:'content', restrict:branch };
+      if(chain.length) return { kind:'category', level:chain[0] };
+      return (BRANCH_CONTENT_TYPES[branch]||[]).length ? { kind:'content', restrict:branch } : { kind:'none' };
     }
     var idx = chain.indexOf(node.catLevel);
-    if(idx === -1 || idx === chain.length-1) return { kind:'content', restrict:branch };
+    if(idx === -1 || idx === chain.length-1){
+      return (BRANCH_CONTENT_TYPES[branch]||[]).length ? { kind:'content', restrict:branch } : { kind:'none' };
+    }
     return { kind:'category', level:chain[idx+1] };
   }
   return { kind:'content', restrict:'detail' };
@@ -1562,6 +1602,7 @@ function renderPanelContent(node){
     var sameFamily = MOVEMENT_TYPES.indexOf(node.type) !== -1 ? MOVEMENT_TYPES
       : node.type === 'trainingMethod' ? ['trainingMethod']
       : node.type === 'treatmentMethod' ? ['treatmentMethod']
+      : node.type === 'classification' ? ['classification']
       : DETAIL_TYPES;
     sameFamily.forEach(function(t){
       var o = el('option'); o.value = t; o.textContent = TYPE_META[t].label;
@@ -1632,8 +1673,46 @@ function renderPanelContent(node){
     body.appendChild(ytGroup);
   }
 
-  // detail fields live on the movement page itself — no separate child pages
-  if(MOVEMENT_TYPES.indexOf(node.type) !== -1){
+  // multi-select category tags for training method pages
+  function buildMultiCategoryGroup(field, list, accentVar){
+    var mcGroup = el('div','field-group');
+    mcGroup.appendChild(labelEl('分類（複数選択可）'));
+    var mcRow = el('div','chip-row');
+    var current = Array.isArray(node[field]) ? node[field] : [];
+    list.forEach(function(mc){
+      var btn = el('button','mc-pill' + (current.indexOf(mc.key)!==-1 ? ' active' : ''));
+      btn.type = 'button';
+      btn.style.setProperty('--mc-color', 'var(' + accentVar + ')');
+      btn.textContent = mc.label;
+      btn.disabled = !editMode;
+      btn.addEventListener('click', function(key){
+        return function(){
+          var arr = Array.isArray(node[field]) ? node[field].slice() : [];
+          var idx = arr.indexOf(key);
+          if(idx===-1) arr.push(key); else arr.splice(idx,1);
+          node[field] = arr;
+          persistLocalCache();
+          renderPanelContent(node);
+          if(currentView === 'list') renderListView();
+        };
+      }(mc.key));
+      mcRow.appendChild(btn);
+    });
+    mcGroup.appendChild(mcRow);
+    body.appendChild(mcGroup);
+  }
+  if(node.type === 'trainingMethod'){
+    buildMultiCategoryGroup('methodCategories', TRAINING_CATEGORIES, '--accent-training');
+  }
+  if(node.type === 'treatmentMethod'){
+    buildMultiCategoryGroup('treatmentCategories', TREATMENT_CATEGORIES, '--accent-treatment');
+  }
+
+  // detail fields live on the movement/classification page itself — no separate child pages.
+  // The 外傷障害 category page also gets these, since it can carry its own description
+  // in addition to holding 分類 sub-pages.
+  var isInjuryCategory = isCategory && node.category === 'general' && node.catLevel === 'injury';
+  if(MOVEMENT_TYPES.indexOf(node.type) !== -1 || node.type === 'classification' || isInjuryCategory){
     DETAIL_FIELD_DEFS.forEach(function(fd){
       var fg = el('div','field-group');
       var lbl = el('label'); lbl.textContent = fd.label;
@@ -1782,7 +1861,7 @@ function renderPanelContent(node){
     return group;
   }
 
-  if(MOVEMENT_TYPES.indexOf(node.type) !== -1){
+  if(MOVEMENT_TYPES.indexOf(node.type) !== -1 || node.type === 'classification' || isInjuryCategory){
     [buildRelatedGroup('関連する練習法・ドリル', ['trainingMethod'], '練習法'),
      buildRelatedGroup('関連する治療法', ['treatmentMethod'], '治療法'),
      buildRelatedGroup('その他の関連ページ', TYPE_ORDER.filter(function(t){ return t!=='trainingMethod' && t!=='treatmentMethod'; }), null)
@@ -1793,7 +1872,7 @@ function renderPanelContent(node){
   }
 
   // add child — only category nodes need this (movement pages hold their detail as fields, not child pages)
-  if(isCategory && editMode){
+  if(isCategory && editMode && nextStepFor(node).kind !== 'none'){
     var step = nextStepFor(node);
     var childChoices = step.kind==='content' ? (BRANCH_CONTENT_TYPES[step.restrict] || MOVEMENT_TYPES) : [];
     var childGroup = el('div','field-group');
@@ -2009,6 +2088,7 @@ function renderListView(){
       return function(){
         listState.branch = bb; listState.path = [];
         listCreatingLevel = null; listContentCreating = null; listAggregateId = null;
+        listMethodFilter = [];
         renderListView();
       };
     }(b));
@@ -2071,12 +2151,20 @@ function renderListView(){
 
     if(listState.path[i]){
       var selNode = nodesById[listState.path[i]];
+      var openRow = el('div','list-cat-actions');
+      var openBtn = el('button','list-open-btn');
+      openBtn.textContent = '「' + (selNode ? (selNode.title||'') : '') + '」のページを開く';
+      openBtn.addEventListener('click', function(nid){
+        return function(){ openPanel(nid); };
+      }(listState.path[i]));
+      openRow.appendChild(openBtn);
       var aggBtn = el('button','list-agg-btn');
-      aggBtn.textContent = '「' + (selNode ? (selNode.title||'') : '') + '」配下をすべてまとめて表示';
+      aggBtn.textContent = '配下をすべてまとめて表示';
       aggBtn.addEventListener('click', function(nid){
         return function(){ listAggregateId = nid; renderListView(); };
       }(listState.path[i]));
-      levelWrap.appendChild(aggBtn);
+      openRow.appendChild(aggBtn);
+      levelWrap.appendChild(openRow);
     }
 
     wrap.appendChild(levelWrap);
@@ -2088,7 +2176,21 @@ function renderListView(){
   if(listAggregateId){
     renderAggregateList(listAggregateId);
   } else if(parentId && listState.path.length >= chain.length && (chain.length === 0 || listState.path[chain.length-1])){
-    renderContentList(chain.length === 0 ? ROOT_IDS[branch] : listState.path[chain.length-1]);
+    var leafId = chain.length === 0 ? ROOT_IDS[branch] : listState.path[chain.length-1];
+    if((BRANCH_CONTENT_TYPES[branch]||[]).length === 0){
+      var itemsWrap2 = $('#list-items');
+      itemsWrap2.innerHTML = '';
+      var leafNode = nodesById[leafId];
+      var prompt = el('div','list-empty-hint');
+      prompt.textContent = 'このページ自体に原因・根拠や分類などを記録できます。';
+      itemsWrap2.appendChild(prompt);
+      var openLeafBtn = el('button','list-open-btn');
+      openLeafBtn.textContent = '「' + (leafNode ? (leafNode.title||'') : '') + '」を開く';
+      openLeafBtn.addEventListener('click', function(){ openPanel(leafId); });
+      itemsWrap2.appendChild(openLeafBtn);
+    } else {
+      renderContentList(leafId);
+    }
   } else {
     var itemsWrap = $('#list-items');
     itemsWrap.innerHTML = '';
@@ -2170,6 +2272,42 @@ function renderContentList(leafId){
   itemsWrap.innerHTML = '';
   var items = childrenOf(leafId).filter(function(n){ return n.kind==='content'; });
 
+  var mcConfig = listState.branch === 'training' ? { field:'methodCategories', list:TRAINING_CATEGORIES }
+    : listState.branch === 'treatment' ? { field:'treatmentCategories', list:TREATMENT_CATEGORIES }
+    : null;
+
+  if(mcConfig){
+    var filterRow = el('div','mc-filter-row');
+    mcConfig.list.forEach(function(mc){
+      var btn = el('button','mc-pill' + (listMethodFilter.indexOf(mc.key)!==-1 ? ' active' : ''));
+      btn.type = 'button';
+      btn.textContent = mc.label;
+      btn.addEventListener('click', function(key){
+        return function(){
+          var idx = listMethodFilter.indexOf(key);
+          if(idx===-1) listMethodFilter.push(key); else listMethodFilter.splice(idx,1);
+          renderContentList(leafId);
+        };
+      }(mc.key));
+      filterRow.appendChild(btn);
+    });
+    if(listMethodFilter.length){
+      var clearBtn = el('button','mc-filter-clear');
+      clearBtn.type = 'button';
+      clearBtn.textContent = '✕ 絞り込み解除';
+      clearBtn.addEventListener('click', function(){ listMethodFilter = []; renderContentList(leafId); });
+      filterRow.appendChild(clearBtn);
+    }
+    itemsWrap.appendChild(filterRow);
+
+    if(listMethodFilter.length){
+      items = items.filter(function(n){
+        var cats = Array.isArray(n[mcConfig.field]) ? n[mcConfig.field] : [];
+        return listMethodFilter.some(function(k){ return cats.indexOf(k) !== -1; });
+      });
+    }
+  }
+
   if(!items.length){
     var hint = el('div','list-empty-hint');
     hint.textContent = editMode ? 'まだ項目がありません。下のボタンから追加してください。' : 'まだ項目がありません。';
@@ -2186,6 +2324,15 @@ function renderContentList(leafId){
     var t = el('span','list-row-title'); t.textContent = n.title || '(無題)';
     titleRow.appendChild(tag); titleRow.appendChild(t);
     col.appendChild(titleRow);
+    if(mcConfig && n[mcConfig.field] && n[mcConfig.field].length){
+      var mcRow2 = el('div','list-row-tags');
+      n[mcConfig.field].forEach(function(k){
+        var mc = mcConfig.list.filter(function(x){return x.key===k;})[0];
+        if(!mc) return;
+        var c=el('span','mini-tag'); c.textContent=mc.label; mcRow2.appendChild(c);
+      });
+      col.appendChild(mcRow2);
+    }
     if(n.tags && n.tags.length){
       var tagsRow = el('div','list-row-tags');
       n.tags.forEach(function(tg){ var c=el('span','mini-tag'); c.textContent='#'+tg; tagsRow.appendChild(c); });
