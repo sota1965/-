@@ -414,6 +414,15 @@ button{font-family:inherit;}
   margin-bottom:7px;letter-spacing:.02em;
 }
 .list-chip-row{display:flex;flex-wrap:wrap;gap:7px;}
+.list-cat-chip-wrap{position:relative;display:inline-flex;}
+.list-cat-chip-del{
+  position:absolute;top:-6px;right:-6px;
+  width:18px;height:18px;border-radius:50%;
+  background:var(--danger);color:#fff;border:2px solid var(--bg);
+  font-size:10px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  padding:0;
+}
 .list-cat-chip{
   border:1.5px dashed var(--accent-category);
   color:var(--ink);
@@ -2333,6 +2342,7 @@ function renderListView(){
     var options = childrenOf(parentId).filter(function(n){ return n.kind==='category'; });
     var chipsRow = el('div','list-chip-row');
     options.forEach(function(opt){
+      var wrap2 = el('span','list-cat-chip-wrap');
       var chip = el('button','list-cat-chip' + (listState.path[i]===opt.id?' active':''));
       chip.textContent = opt.title || '(無題)';
       chip.addEventListener('click', function(oid, idx){
@@ -2343,7 +2353,27 @@ function renderListView(){
           renderListView();
         };
       }(opt.id, i));
-      chipsRow.appendChild(chip);
+      wrap2.appendChild(chip);
+      if(editMode){
+        var delChip = el('button','list-cat-chip-del'); delChip.type='button'; delChip.textContent='✕';
+        delChip.title = '削除';
+        delChip.addEventListener('click', function(oid, idx){
+          return function(ev){
+            ev.stopPropagation();
+            var descCount = collectDescendantIds(oid).length;
+            var msg = descCount>0
+              ? ('「' + (nodesById[oid]?nodesById[oid].title:'') + '」と、その中の' + descCount + '件をすべて削除しますか？この操作は取り消せません。')
+              : ('「' + (nodesById[oid]?nodesById[oid].title:'') + '」を削除しますか？この操作は取り消せません。');
+            if(confirm(msg)){
+              if(listState.path[idx] === oid){ listState.path.length = idx; }
+              deleteNode(oid);
+              renderListView();
+            }
+          };
+        }(opt.id, i));
+        wrap2.appendChild(delChip);
+      }
+      chipsRow.appendChild(wrap2);
     });
     if(editMode){
       var addChip = el('button','list-cat-chip add');
