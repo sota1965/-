@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>動作エラー解剖アトラス</title>
+<title>アスリートケア・ナレッジアトラス</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Shippori+Mincho+B1:wght@500;700&display=swap" rel="stylesheet">
@@ -98,6 +98,39 @@ body{
   overscroll-behavior:none;
 }
 button{font-family:inherit;}
+#gate-overlay{
+  position:fixed;inset:0;z-index:100;
+  background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;
+}
+#gate-overlay.hide{display:none;}
+.gate-box{
+  width:100%;max-width:320px;
+  text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+}
+.gate-mark{
+  font-family:var(--font-display);font-weight:700;font-size:28px;
+  width:56px;height:56px;border-radius:50%;
+  border:2px solid var(--ink);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:6px;
+}
+.gate-title{font-family:var(--font-display);font-size:18px;font-weight:700;}
+.gate-sub{font-size:13px;color:var(--ink-soft);margin-bottom:8px;}
+#gate-input{
+  width:100%;padding:12px 14px;border-radius:10px;
+  border:1px solid var(--line);background:var(--card-bg);color:var(--ink);
+  font-size:15px;text-align:center;
+}
+#gate-btn{
+  width:100%;padding:12px;border-radius:10px;border:none;
+  background:var(--ink);color:var(--bg);
+  font-size:14.5px;font-weight:700;cursor:pointer;
+}
+.gate-error{color:var(--danger);font-size:12.5px;}
+
 #app{
   height:100vh;
   height:100dvh;
@@ -439,6 +472,7 @@ button{font-family:inherit;}
   font-size:13px;font-weight:700;color:var(--ink-soft);
   margin-bottom:12px;
 }
+.tag-filter-wrap{margin-bottom:14px;}
 .list-row-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px;}
 .mini-tag{
   font-size:10.5px;color:var(--ink-soft);
@@ -514,7 +548,7 @@ button{font-family:inherit;}
   font-size:14px;
   resize:vertical;
 }
-.field-group textarea{min-height:76px;line-height:1.55;}
+.field-group textarea{min-height:76px;line-height:1.55;overflow-y:hidden;}
 .field-group input:focus,.field-group textarea:focus,.field-group select:focus{
   outline:2px solid var(--type-color,var(--accent-movement));outline-offset:1px;
 }
@@ -794,12 +828,24 @@ button{font-family:inherit;}
 </style>
 </head>
 <body>
+
+<div id="gate-overlay">
+  <div class="gate-box">
+    <div class="gate-mark">解</div>
+    <div class="gate-title">アスリートケア・ナレッジアトラス</div>
+    <div class="gate-sub">合言葉を入力してください</div>
+    <input type="password" id="gate-input" placeholder="合言葉">
+    <button id="gate-btn" type="button">開く</button>
+    <div class="gate-error" id="gate-error" hidden>合言葉が違います</div>
+  </div>
+</div>
+
 <div id="app">
 
   <header id="topbar">
     <div class="brand">
       <div class="brand-mark">解</div>
-      <h1>動作エラー解剖アトラス</h1>
+      <h1>アスリートケア・ナレッジアトラス</h1>
     </div>
     <button id="rel-overview-btn" class="rel-overview-btn" type="button">🔗 関連一覧</button>
     <button id="edit-mode-btn" class="edit-mode-btn" type="button">✏️ 編集モード</button>
@@ -878,7 +924,7 @@ button{font-family:inherit;}
   </div>
 </div>
 
-<input type="file" id="file-input" accept="image/*" multiple class="sr-only">
+<input type="file" id="file-input" accept="image/*,video/*" multiple class="sr-only">
 
 <script>
 (function(){
@@ -986,6 +1032,8 @@ var listState = { branch:'competitive', path:[] };
 var listCreatingLevel = null;
 var listContentCreating = null;
 var listMethodFilter = [];
+var searchTypeFilter = [];
+var searchTagFilter = [];
 var editMode = true;
 try{ var savedEditMode = localStorage.getItem('ema_edit_mode'); if(savedEditMode === '0') editMode = false; }catch(e){}
 var listAggregateId = null;
@@ -995,6 +1043,10 @@ function $(sel){ return document.querySelector(sel); }
 function el(tag, cls){ var e=document.createElement(tag); if(cls) e.className=cls; return e; }
 function cssColor(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
 function labelEl(text){ var l=el('label'); l.textContent=text; return l; }
+function autoGrow(ta){
+  ta.style.height = 'auto';
+  ta.style.height = (ta.scrollHeight + 2) + 'px';
+}
 function newId(){ return 'n-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
 
 function showToast(msg){
@@ -1265,18 +1317,41 @@ function fileToCompressedDataUrl(file){
   });
 }
 
+var MAX_VIDEO_BYTES = 15 * 1024 * 1024; // 15MB — localStorage has limited total capacity
+function fileToRawDataUrl(file){
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onerror = function(){ reject(new Error('read failed')); };
+    reader.onload = function(){ resolve(reader.result); };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function addMediaFiles(id, files){
   for(var i=0;i<files.length;i++){
     var f = files[i];
     try{
-      var dataUrl = await fileToCompressedDataUrl(f);
-      var media = (nodesById[id].media || []).slice();
-      media.push({ id: newId(), contentType: 'image/jpeg', dataUrl: dataUrl });
-      nodesById[id].media = media;
-      persistLocalCache();
-      renderPanelContent(nodesById[id]);
+      if(/^video\//.test(f.type)){
+        if(f.size > MAX_VIDEO_BYTES){
+          showToast('この動画は大きすぎます（15MBまで）。動画リンク欄の利用も検討してください');
+          continue;
+        }
+        var vDataUrl = await fileToRawDataUrl(f);
+        var vMedia = (nodesById[id].media || []).slice();
+        vMedia.push({ id: newId(), contentType: f.type || 'video/mp4', dataUrl: vDataUrl, kind:'video' });
+        nodesById[id].media = vMedia;
+        persistLocalCache();
+        renderPanelContent(nodesById[id]);
+      } else {
+        var dataUrl = await fileToCompressedDataUrl(f);
+        var media = (nodesById[id].media || []).slice();
+        media.push({ id: newId(), contentType: 'image/jpeg', dataUrl: dataUrl, kind:'image' });
+        nodesById[id].media = media;
+        persistLocalCache();
+        renderPanelContent(nodesById[id]);
+      }
     }catch(e){
-      showToast('画像として読み込めませんでした（動画はYouTubeリンクをご利用ください）');
+      showToast('この形式は読み込めませんでした');
     }
   }
 }
@@ -1337,10 +1412,14 @@ function passesFilter(node){
 
 function matchesSearch(node){
   if(!searchQuery) return true;
-  var q = searchQuery.toLowerCase();
-  return (node.title||'').toLowerCase().indexOf(q) !== -1 ||
-         (node.note||'').toLowerCase().indexOf(q) !== -1 ||
-         (node.tags||[]).some(function(t){ return (t||'').toLowerCase().indexOf(q) !== -1; });
+  var keywords = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  if(!keywords.length) return true;
+  var haystack = [
+    node.title||'', node.note||'',
+    node.causeText||'', node.effectText||'', node.correctionText||'',
+    (node.tags||[]).join(' ')
+  ].join(' ').toLowerCase();
+  return keywords.every(function(k){ return haystack.indexOf(k) !== -1; });
 }
 
 function ancestorsOf(id){
@@ -1635,9 +1714,10 @@ function renderPanelContent(node){
     noteArea.value = node.note || '';
     noteArea.placeholder = '症状の特徴、根拠、参考文献、練習ドリルなど自由に記録';
     noteArea.readOnly = !editMode;
-    noteArea.addEventListener('input', function(){ debouncedUpdate(node.id, 'note', noteArea.value); });
+    noteArea.addEventListener('input', function(){ debouncedUpdate(node.id, 'note', noteArea.value); autoGrow(noteArea); });
     noteGroup.appendChild(noteLabel); noteGroup.appendChild(noteArea);
     body.appendChild(noteGroup);
+    autoGrow(noteArea);
   }
 
   if(isRoot){
@@ -1648,16 +1728,16 @@ function renderPanelContent(node){
     body.appendChild(rn);
   }
 
-  // YouTube link for training/treatment pages — embedding isn't reliable in this
-  // environment, so this opens the video in a new tab instead
+  // Video link for training/treatment pages — embedding isn't reliable in this
+  // environment, so this opens the video (YouTube or any other platform) in a new tab
   if(node.type === 'trainingMethod' || node.type === 'treatmentMethod'){
     var ytGroup = el('div','field-group');
-    ytGroup.appendChild(labelEl('YouTubeリンク'));
-    var ytInput = el('input'); ytInput.type='text'; ytInput.placeholder='https://youtube.com/watch?v=...';
+    ytGroup.appendChild(labelEl('動画リンク（YouTubeや他サイトも可）'));
+    var ytInput = el('input'); ytInput.type='text'; ytInput.placeholder='https://...（動画のURL）';
     ytInput.value = node.youtubeUrl || '';
     ytInput.readOnly = !editMode;
     var ytOpenBtn = el('a','yt-open-btn'); ytOpenBtn.target='_blank'; ytOpenBtn.rel='noopener';
-    ytOpenBtn.textContent = '▶ YouTubeで開く';
+    ytOpenBtn.textContent = '▶ 動画リンクを開く';
     function updateYtBtn(){
       var v = ytInput.value.trim();
       if(v){ ytOpenBtn.href = v; ytOpenBtn.style.display = 'inline-flex'; }
@@ -1728,21 +1808,76 @@ function renderPanelContent(node){
       ta.style.borderLeft = '3px solid ' + cssColor(fd.cssVar);
       ta.readOnly = !editMode;
       ta.addEventListener('input', function(k, area){
-        return function(){ debouncedUpdate(node.id, k, area.value); };
+        return function(){ debouncedUpdate(node.id, k, area.value); autoGrow(area); };
       }(fd.key, ta));
       fg.appendChild(lbl); fg.appendChild(ta);
       body.appendChild(fg);
+      autoGrow(ta);
     });
+  }
+
+  // repeatable classification labels live directly on the injury page (no sub-pages)
+  if(isInjuryCategory){
+    var clsGroup = el('div','field-group');
+    clsGroup.appendChild(labelEl('分類'));
+    var clsRow = el('div','chip-row');
+    var clsList = Array.isArray(node.classifications) ? node.classifications : [];
+    clsList.forEach(function(cl, idx){
+      var chip = el('span','chip');
+      var lbl2 = el('span'); lbl2.textContent = cl;
+      chip.appendChild(lbl2);
+      if(editMode){
+        var x = el('button','chip-x'); x.textContent='✕';
+        x.addEventListener('click', function(i2){ return function(ev){
+          ev.stopPropagation();
+          var arr = (node.classifications||[]).slice();
+          arr.splice(i2,1);
+          node.classifications = arr;
+          persistLocalCache();
+          renderPanelContent(node);
+        }; }(idx));
+        chip.appendChild(x);
+      }
+      clsRow.appendChild(chip);
+    });
+    if(editMode){
+      var clsInput = el('input'); clsInput.type='text'; clsInput.placeholder='分類名を入力してEnter';
+      clsInput.style.cssText = 'flex:1;min-width:120px;border:1px dashed var(--line);border-radius:999px;padding:5px 12px;font-size:12px;background:transparent;color:var(--ink);';
+      clsInput.addEventListener('keydown', function(ev){
+        if(ev.key === 'Enter'){
+          ev.preventDefault();
+          var v = clsInput.value.trim();
+          if(v){
+            var arr = (node.classifications||[]).slice();
+            arr.push(v);
+            node.classifications = arr;
+            persistLocalCache();
+            clsInput.value = '';
+            renderPanelContent(node);
+          }
+        }
+      });
+      clsRow.appendChild(clsInput);
+    }
+    clsGroup.appendChild(clsRow);
+    body.appendChild(clsGroup);
   }
 
   // media
   var mediaGroup = el('div','field-group');
-  mediaGroup.appendChild(labelEl('写真'));
+  mediaGroup.appendChild(labelEl('写真・動画'));
   var grid = el('div','media-grid');
   (node.media||[]).forEach(function(m){
     var thumb = el('div','media-thumb');
-    var img = el('img'); img.src = m.dataUrl; img.loading='lazy';
-    thumb.appendChild(img);
+    if(m.kind === 'video'){
+      var v = el('video'); v.src = m.dataUrl; v.muted = true;
+      thumb.appendChild(v);
+      var badge = el('span','vid-badge'); badge.textContent='動画';
+      thumb.appendChild(badge);
+    } else {
+      var img = el('img'); img.src = m.dataUrl; img.loading='lazy';
+      thumb.appendChild(img);
+    }
     thumb.addEventListener('click', function(mm){ return function(){ openMediaViewer(mm); }; }(m));
     if(editMode){
       var rmBtn = el('button','rm-btn'); rmBtn.textContent='✕';
@@ -1754,7 +1889,7 @@ function renderPanelContent(node){
   mediaGroup.appendChild(grid);
   if(editMode){
     var uploadBtn = el('button','upload-btn'); uploadBtn.type='button';
-    uploadBtn.textContent = '＋ 写真を追加';
+    uploadBtn.textContent = '＋ 写真・動画を追加';
     uploadBtn.addEventListener('click', function(){
       var fi = $('#file-input');
       fi.onchange = function(){
@@ -1956,8 +2091,13 @@ function openMediaViewer(m){
   var mv = $('#media-viewer');
   var content = $('#mv-content');
   content.innerHTML = '';
-  var img = el('img'); img.src = m.dataUrl;
-  content.appendChild(img);
+  if(m.kind === 'video'){
+    var v = el('video'); v.src = m.dataUrl; v.controls = true; v.autoplay = true;
+    content.appendChild(v);
+  } else {
+    var img = el('img'); img.src = m.dataUrl;
+    content.appendChild(img);
+  }
   mv.classList.add('show');
 }
 
@@ -2039,11 +2179,88 @@ function renderSearchResults(){
   hint.textContent = '「' + searchQuery + '」の検索結果';
   wrap.appendChild(hint);
 
+  var typeFilterRow = el('div','mc-filter-row');
+  MOVEMENT_TYPES.forEach(function(t){
+    var btn = el('button','mc-pill' + (searchTypeFilter.indexOf(t)!==-1 ? ' active' : ''));
+    btn.type = 'button';
+    btn.style.setProperty('--mc-color', 'var(' + TYPE_META[t].cssVar + ')');
+    btn.textContent = TYPE_META[t].label;
+    btn.addEventListener('click', function(tt){
+      return function(){
+        var idx = searchTypeFilter.indexOf(tt);
+        if(idx===-1) searchTypeFilter.push(tt); else searchTypeFilter.splice(idx,1);
+        renderSearchResults();
+      };
+    }(t));
+    typeFilterRow.appendChild(btn);
+  });
+  wrap.appendChild(typeFilterRow);
+
+  var tagFilterWrap = el('div','tag-filter-wrap');
+  var tagFilterChips = el('div','chip-row');
+  searchTagFilter.forEach(function(tg){
+    var chip = el('span','chip');
+    var lbl = el('span'); lbl.textContent = '#' + tg;
+    chip.appendChild(lbl);
+    var x = el('button','chip-x'); x.textContent='✕';
+    x.addEventListener('click', function(t2){ return function(){
+      searchTagFilter = searchTagFilter.filter(function(x2){ return x2!==t2; });
+      renderSearchResults();
+    }; }(tg));
+    chip.appendChild(x);
+    tagFilterChips.appendChild(chip);
+  });
+  var tagFilterInputWrap = el('div','tag-input-wrap');
+  var tagFilterInput = el('input'); tagFilterInput.type='text'; tagFilterInput.className='tag-input';
+  tagFilterInput.placeholder = 'タグで絞り込む';
+  var tagFilterSuggest = el('div','tag-suggest');
+  function renderTagFilterSuggestions(){
+    var q = tagFilterInput.value.trim().toLowerCase();
+    var all = getAllTags().filter(function(t){ return searchTagFilter.indexOf(t)===-1; });
+    var matches = q ? all.filter(function(t){ return t.toLowerCase().indexOf(q)!==-1; }) : all;
+    tagFilterSuggest.innerHTML = '';
+    if(!matches.length){ tagFilterSuggest.classList.remove('show'); return; }
+    matches.slice(0,8).forEach(function(t){
+      var item = el('div','tag-suggest-item');
+      item.textContent = '#' + t;
+      item.addEventListener('mousedown', function(ev){ ev.preventDefault(); });
+      item.addEventListener('click', function(){
+        searchTagFilter.push(t);
+        tagFilterInput.value = '';
+        tagFilterSuggest.classList.remove('show');
+        renderSearchResults();
+      });
+      tagFilterSuggest.appendChild(item);
+    });
+    tagFilterSuggest.classList.add('show');
+  }
+  tagFilterInput.addEventListener('focus', renderTagFilterSuggestions);
+  tagFilterInput.addEventListener('input', renderTagFilterSuggestions);
+  tagFilterInput.addEventListener('blur', function(){ setTimeout(function(){ tagFilterSuggest.classList.remove('show'); }, 150); });
+  tagFilterInput.addEventListener('keydown', function(ev){
+    if(ev.key === 'Enter'){
+      ev.preventDefault();
+      var v = tagFilterInput.value.trim().replace(/^#/, '');
+      if(v && searchTagFilter.indexOf(v)===-1){ searchTagFilter.push(v); tagFilterInput.value=''; renderSearchResults(); }
+    }
+  });
+  tagFilterInputWrap.appendChild(tagFilterInput);
+  tagFilterInputWrap.appendChild(tagFilterSuggest);
+  tagFilterChips.appendChild(tagFilterInputWrap);
+  tagFilterWrap.appendChild(tagFilterChips);
+  wrap.appendChild(tagFilterWrap);
+
   var itemsWrap = $('#list-items');
   itemsWrap.innerHTML = '';
   var results = Object.keys(nodesById)
     .map(function(id){ return nodesById[id]; })
     .filter(function(n){ return n.kind === 'content' && n.parentId !== null && matchesSearch(n); })
+    .filter(function(n){ return !searchTypeFilter.length || searchTypeFilter.indexOf(n.type) !== -1; })
+    .filter(function(n){
+      if(!searchTagFilter.length) return true;
+      var tags = n.tags||[];
+      return searchTagFilter.every(function(t){ return tags.indexOf(t) !== -1; });
+    })
     .sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
 
   if(!results.length){
@@ -2303,7 +2520,7 @@ function renderContentList(leafId){
     if(listMethodFilter.length){
       items = items.filter(function(n){
         var cats = Array.isArray(n[mcConfig.field]) ? n[mcConfig.field] : [];
-        return listMethodFilter.some(function(k){ return cats.indexOf(k) !== -1; });
+        return listMethodFilter.every(function(k){ return cats.indexOf(k) !== -1; });
       });
     }
   }
@@ -2546,6 +2763,36 @@ function bindDiagUI(){
   });
 }
 bindDiagUI();
+
+/* ===================== password gate =====================
+   Not real security — anyone who views the page source can read
+   this value. It's a light deterrent against a shared link being
+   opened casually, not a substitute for keeping the link private.
+   To change the password, edit the line just below. */
+var SITE_PASSWORD = "changeme";
+var GATE_KEY = 'ema_gate_ok_v1';
+(function initGate(){
+  var overlay = $('#gate-overlay');
+  try{
+    if(localStorage.getItem(GATE_KEY) === '1'){ overlay.classList.add('hide'); return; }
+  }catch(e){}
+  var input = $('#gate-input');
+  var btn = $('#gate-btn');
+  var err = $('#gate-error');
+  function tryUnlock(){
+    if(input.value === SITE_PASSWORD){
+      try{ localStorage.setItem(GATE_KEY, '1'); }catch(e){}
+      overlay.classList.add('hide');
+    } else {
+      err.hidden = false;
+      input.value = '';
+      input.focus();
+    }
+  }
+  btn.addEventListener('click', tryUnlock);
+  input.addEventListener('keydown', function(ev){ if(ev.key === 'Enter') tryUnlock(); });
+  setTimeout(function(){ input.focus(); }, 100);
+})();
 
 init();
 })();
