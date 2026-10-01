@@ -976,6 +976,13 @@ var DETAIL_FIELD_DEFS = [
   { key:'effectText',      label:'影響',       cssVar:'--accent-effect' },
   { key:'correctionText',  label:'対処法',     cssVar:'--accent-correction' }
 ];
+var TREATMENT_FIELD_DEFS = [
+  { key:'treatmentSite',      label:'施術部位' },
+  { key:'treatmentEquipment', label:'使用する機材' },
+  { key:'treatmentEffect',    label:'効果' },
+  { key:'treatmentCaution',   label:'注意点' },
+  { key:'treatmentSource',    label:'出典元・指導者' }
+];
 var TYPE_ORDER = MOVEMENT_TYPES.concat(DETAIL_TYPES).concat(['classification']);
 
 var BRANCH_META = {
@@ -1003,7 +1010,7 @@ var LEVEL_LABEL = {
 };
 var BRANCH_CONTENT_TYPES = {
   competitive: MOVEMENT_TYPES,
-  general: [],
+  general: ['classification'],
   training: ['trainingMethod'],
   treatment: ['treatmentMethod']
 };
@@ -1715,10 +1722,10 @@ function renderPanelContent(node){
   body.appendChild(titleGroup);
 
   // note
-  if(!isCategory || !isRoot){
+  if((!isCategory || !isRoot) && node.type !== 'treatmentMethod'){
     var noteGroup = el('div','field-group');
     var noteLabel = el('label');
-    noteLabel.textContent = node.type==='anatomy' ? '解剖学的な内容' : node.type==='physiology' ? '生理学的な内容' : node.type==='effect' ? '影響の内容' : node.type==='trainingMethod' ? 'やり方・手順' : node.type==='treatmentMethod' ? '施術内容・手順' : (MOVEMENT_TYPES.indexOf(node.type)!==-1 ? '動作の説明' : (isCategory ? '補足メモ' : '詳細メモ'));
+    noteLabel.textContent = node.type==='anatomy' ? '解剖学的な内容' : node.type==='physiology' ? '生理学的な内容' : node.type==='effect' ? '影響の内容' : node.type==='trainingMethod' ? 'やり方・手順' : (MOVEMENT_TYPES.indexOf(node.type)!==-1 ? '動作の説明' : (isCategory ? '補足メモ' : '詳細メモ'));
     var noteArea = el('textarea');
     noteArea.value = node.note || '';
     noteArea.placeholder = '症状の特徴、根拠、参考文献、練習ドリルなど自由に記録';
@@ -1727,6 +1734,29 @@ function renderPanelContent(node){
     noteGroup.appendChild(noteLabel); noteGroup.appendChild(noteArea);
     body.appendChild(noteGroup);
     autoGrow(noteArea);
+  }
+
+  // treatment method pages get dedicated structured fields instead of one free note
+  if(node.type === 'treatmentMethod'){
+    var anyTreatmentFieldFilled = TREATMENT_FIELD_DEFS.some(function(fd){ return node[fd.key]; });
+    TREATMENT_FIELD_DEFS.forEach(function(fd){
+      var fg = el('div','field-group');
+      var lbl = el('label'); lbl.textContent = fd.label;
+      var ta = el('textarea');
+      var initial = node[fd.key];
+      if(!initial && !anyTreatmentFieldFilled && node.note && fd.key === 'treatmentEffect'){
+        initial = node.note;
+      }
+      ta.value = initial || '';
+      ta.placeholder = fd.label + 'を記録';
+      ta.readOnly = !editMode;
+      ta.addEventListener('input', function(k, area){
+        return function(){ debouncedUpdate(node.id, k, area.value); autoGrow(area); };
+      }(fd.key, ta));
+      fg.appendChild(lbl); fg.appendChild(ta);
+      body.appendChild(fg);
+      autoGrow(ta);
+    });
   }
 
   if(isRoot){
