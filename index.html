@@ -423,6 +423,14 @@ button{font-family:inherit;}
   display:flex;align-items:center;justify-content:center;
   padding:0;
 }
+.list-cat-chip-ren{
+  position:absolute;top:-6px;left:-6px;
+  width:18px;height:18px;border-radius:50%;
+  background:var(--card-bg);color:var(--ink);border:2px solid var(--bg);
+  font-size:9px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  padding:0;box-shadow:0 1px 3px rgba(0,0,0,.2);
+}
 .list-cat-chip{
   border:1.5px dashed var(--accent-category);
   color:var(--ink);
@@ -976,8 +984,10 @@ var DETAIL_FIELD_DEFS = [
   { key:'effectText',      label:'影響',       cssVar:'--accent-effect' },
   { key:'correctionText',  label:'対処法',     cssVar:'--accent-correction' }
 ];
+var PROCEDURE_FIELD_DEF = { key:'procedureText', label:'術式', cssVar:'--accent-treatment' };
 var TREATMENT_FIELD_DEFS = [
   { key:'treatmentSite',      label:'施術部位' },
+  { key:'treatmentMethodText',label:'方法' },
   { key:'treatmentEquipment', label:'使用する機材' },
   { key:'treatmentEffect',    label:'効果' },
   { key:'treatmentCaution',   label:'注意点' },
@@ -1285,6 +1295,22 @@ function getAllTags(){
   return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'ja'); });
 }
 
+function renameTagEverywhere(oldTag, newTag){
+  var count = 0;
+  Object.keys(nodesById).forEach(function(id){
+    var n = nodesById[id];
+    if(!n.tags || n.tags.indexOf(oldTag) === -1) return;
+    var next = n.tags.map(function(t){ return t === oldTag ? newTag : t; });
+    // avoid duplicate tags if newTag already existed on this node
+    var seen = {};
+    next = next.filter(function(t){ if(seen[t]) return false; seen[t]=true; return true; });
+    n.tags = next;
+    count++;
+  });
+  if(count) persistLocalCache();
+  return count;
+}
+
 function addTag(id, tag){
   var n = nodesById[id];
   if(!n) return;
@@ -1333,7 +1359,7 @@ function fileToCompressedDataUrl(file){
   });
 }
 
-var MAX_VIDEO_BYTES = 15 * 1024 * 1024; // 15MB — localStorage has limited total capacity
+var MAX_VIDEO_BYTES = 4 * 1024 * 1024; // 4MB — localStorage's total quota (often ~5-10MB) can't realistically hold much more
 function fileToRawDataUrl(file){
   return new Promise(function(resolve, reject){
     var reader = new FileReader();
@@ -1349,7 +1375,7 @@ async function addMediaFiles(id, files){
     try{
       if(/^video\//.test(f.type)){
         if(f.size > MAX_VIDEO_BYTES){
-          showToast('この動画は大きすぎます（15MBまで）。動画リンク欄の利用も検討してください');
+          showToast('この動画は大きすぎます（4MBまで）。長い動画は動画リンク欄をご利用ください');
           continue;
         }
         var vDataUrl = await fileToRawDataUrl(f);
@@ -1853,6 +1879,19 @@ function renderPanelContent(node){
       body.appendChild(fg);
       autoGrow(ta);
     });
+
+    var pfg = el('div','field-group');
+    var plbl = el('label'); plbl.textContent = PROCEDURE_FIELD_DEF.label;
+    plbl.style.color = cssColor(PROCEDURE_FIELD_DEF.cssVar);
+    var pta = el('textarea');
+    pta.value = node[PROCEDURE_FIELD_DEF.key] || '';
+    pta.placeholder = PROCEDURE_FIELD_DEF.label + 'を記録';
+    pta.style.borderLeft = '3px solid ' + cssColor(PROCEDURE_FIELD_DEF.cssVar);
+    pta.readOnly = !editMode;
+    pta.addEventListener('input', function(){ debouncedUpdate(node.id, PROCEDURE_FIELD_DEF.key, pta.value); autoGrow(pta); });
+    pfg.appendChild(plbl); pfg.appendChild(pta);
+    body.appendChild(pfg);
+    autoGrow(pta);
   }
 
   // repeatable classification labels live directly on the injury page (no sub-pages)
@@ -1948,6 +1987,23 @@ function renderPanelContent(node){
   (node.tags||[]).forEach(function(tg){
     var chip = el('span','chip');
     var lbl = el('span'); lbl.textContent = '#' + tg;
+    if(editMode){
+      lbl.style.cursor = 'pointer';
+      lbl.title = 'タップして名前を変更（このタグが付いた全ページに反映されます）';
+      lbl.addEventListener('click', function(tt){
+        return function(ev){
+          ev.stopPropagation();
+          var next = prompt('タグの新しい名前を入力してください（このタグが付いた全ページで変更されます）', tt);
+          if(next === null) return;
+          next = next.trim().replace(/^#/, '');
+          if(!next || next === tt) return;
+          var count = renameTagEverywhere(tt, next);
+          renderPanelContent(nodesById[node.id]);
+          if(currentView === 'list') renderListView();
+          showToast(count + '件のページでタグを変更しました');
+        };
+      }(tg));
+    }
     chip.appendChild(lbl);
     if(editMode){
       var x = el('button','chip-x'); x.textContent='✕';
@@ -2385,6 +2441,21 @@ function renderListView(){
       }(opt.id, i));
       wrap2.appendChild(chip);
       if(editMode){
+        var renChip = el('button','list-cat-chip-ren'); renChip.type='button'; renChip.textContent='✏️';
+        renChip.title = '名前を変更';
+        renChip.addEventListener('click', function(oid){
+          return function(ev){
+            ev.stopPropagation();
+            var cur = nodesById[oid] ? nodesById[oid].title : '';
+            var next = prompt('新しい名前を入力してください', cur);
+            if(next === null) return;
+            next = next.trim();
+            if(!next) return;
+            immediateUpdate(oid, { title: next });
+            renderListView();
+          };
+        }(opt.id));
+        wrap2.appendChild(renChip);
         var delChip = el('button','list-cat-chip-del'); delChip.type='button'; delChip.textContent='✕';
         delChip.title = '削除';
         delChip.addEventListener('click', function(oid, idx){
