@@ -760,6 +760,32 @@ button{font-family:inherit;}
   padding:16px;
 }
 #picker-modal.show{display:flex;}
+
+#text-prompt-modal{
+  position:fixed;inset:0;z-index:45;
+  background:rgba(20,24,22,.45);
+  display:none;align-items:center;justify-content:center;
+  padding:16px;
+}
+#text-prompt-modal.show{display:flex;}
+.tp-box{
+  background:var(--panel-bg);border-radius:14px;
+  width:100%;max-width:360px;padding:18px;
+  box-shadow:var(--shadow);
+}
+.tp-label{font-size:13.5px;font-weight:700;color:var(--ink);margin-bottom:10px;line-height:1.5;}
+#tp-input, #tp-textarea{
+  width:100%;padding:10px 12px;border-radius:8px;
+  border:1px solid var(--line);background:var(--card-bg);color:var(--ink);
+  font-size:15px;margin-bottom:14px;
+}
+#tp-textarea{min-height:140px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;}
+.tp-buttons{display:flex;gap:8px;}
+.tp-buttons button{
+  flex:1;padding:10px;border-radius:8px;font-size:13.5px;font-weight:700;cursor:pointer;
+}
+#tp-cancel{border:1px solid var(--line);background:transparent;color:var(--ink-soft);}
+#tp-ok{border:none;background:var(--ink);color:var(--bg);}
 .picker-box{
   background:var(--panel-bg);
   border-radius:14px;
@@ -915,6 +941,18 @@ button{font-family:inherit;}
       <button id="picker-close">✕</button>
     </div>
     <div class="picker-list" id="picker-list"></div>
+  </div>
+</div>
+
+<div id="text-prompt-modal">
+  <div class="tp-box">
+    <div class="tp-label" id="tp-label"></div>
+    <input type="text" id="tp-input">
+    <textarea id="tp-textarea" hidden></textarea>
+    <div class="tp-buttons">
+      <button id="tp-cancel" type="button">キャンセル</button>
+      <button id="tp-ok" type="button">OK</button>
+    </div>
   </div>
 </div>
 
@@ -1990,14 +2028,14 @@ function renderPanelContent(node){
       lbl.addEventListener('click', function(tt){
         return function(ev){
           ev.stopPropagation();
-          var next = prompt('タグの新しい名前を入力してください（このタグが付いた全ページで変更されます）', tt);
-          if(next === null) return;
-          next = next.trim().replace(/^#/, '');
-          if(!next || next === tt) return;
-          var count = renameTagEverywhere(tt, next);
-          renderPanelContent(nodesById[node.id]);
-          if(currentView === 'list') renderListView();
-          showToast(count + '件のページでタグを変更しました');
+          inlinePrompt('タグの新しい名前を入力してください（このタグが付いた全ページで変更されます）', tt, function(next){
+            next = (next||'').trim().replace(/^#/, '');
+            if(!next || next === tt) return;
+            var count = renameTagEverywhere(tt, next);
+            renderPanelContent(nodesById[node.id]);
+            if(currentView === 'list') renderListView();
+            showToast(count + '件のページでタグを変更しました');
+          });
         };
       }(tg));
     }
@@ -2191,6 +2229,47 @@ function openMediaViewer(m){
     content.appendChild(img);
   }
   mv.classList.add('show');
+}
+
+/* Replacement for window.prompt(), which WKWebView silently refuses to show
+   when the page is running as an iOS Home Screen (standalone) app. */
+function inlinePrompt(message, defaultValue, onConfirm, opts){
+  var multiline = opts && opts.multiline;
+  var modal = $('#text-prompt-modal');
+  var label = $('#tp-label');
+  var input = $('#tp-input');
+  var ta = $('#tp-textarea');
+  var okBtn = $('#tp-ok');
+  var cancelBtn = $('#tp-cancel');
+  var field = multiline ? ta : input;
+  var other = multiline ? input : ta;
+
+  label.textContent = message;
+  field.value = defaultValue || '';
+  field.hidden = false;
+  other.hidden = true;
+  modal.classList.add('show');
+  setTimeout(function(){ field.focus(); if(field.select) field.select(); }, 50);
+
+  function cleanup(){
+    modal.classList.remove('show');
+    okBtn.removeEventListener('click', onOk);
+    cancelBtn.removeEventListener('click', onCancel);
+    field.removeEventListener('keydown', onKey);
+    modal.removeEventListener('click', onBackdrop);
+  }
+  function onOk(){ var v = field.value; cleanup(); onConfirm(v); }
+  function onCancel(){ cleanup(); }
+  function onKey(ev){
+    if(!multiline && ev.key === 'Enter'){ ev.preventDefault(); onOk(); }
+    else if(ev.key === 'Escape'){ onCancel(); }
+  }
+  function onBackdrop(ev){ if(ev.target.id === 'text-prompt-modal') onCancel(); }
+
+  okBtn.addEventListener('click', onOk);
+  cancelBtn.addEventListener('click', onCancel);
+  field.addEventListener('keydown', onKey);
+  modal.addEventListener('click', onBackdrop);
 }
 
 function openPicker(fromId, typeFilter, headTitle){
@@ -2444,12 +2523,12 @@ function renderListView(){
           return function(ev){
             ev.stopPropagation();
             var cur = nodesById[oid] ? nodesById[oid].title : '';
-            var next = prompt('新しい名前を入力してください', cur);
-            if(next === null) return;
-            next = next.trim();
-            if(!next) return;
-            immediateUpdate(oid, { title: next });
-            renderListView();
+            inlinePrompt('新しい名前を入力してください', cur, function(next){
+              next = (next||'').trim();
+              if(!next) return;
+              immediateUpdate(oid, { title: next });
+              renderListView();
+            });
           };
         }(opt.id));
         wrap2.appendChild(renChip);
@@ -2873,21 +2952,21 @@ function bindDiagUI(){
     }
   });
   $('#diag-import').addEventListener('click', function(){
-    var pasted = prompt('バックアップのテキストを貼り付けてください（貼り付けると今のデータに上書き・追加されます）');
-    if(pasted === null) return;
-    pasted = pasted.trim();
-    if(!pasted) return;
-    try{
-      var obj = JSON.parse(pasted);
-      if(!obj || typeof obj !== 'object') throw new Error('invalid');
-      Object.keys(obj).forEach(function(id){ nodesById[id] = obj[id]; });
-      persistLocalCache();
-      renderListView();
-      if(selectedId && nodesById[selectedId]) renderPanelContent(nodesById[selectedId]);
-      showToast('復元しました（' + Object.keys(obj).length + '件）');
-    }catch(e){
-      showToast('復元に失敗しました。テキストの形式を確認してください');
-    }
+    inlinePrompt('バックアップのテキストを貼り付けてください（貼り付けると今のデータに上書き・追加されます）', '', function(pasted){
+      pasted = (pasted||'').trim();
+      if(!pasted) return;
+      try{
+        var obj = JSON.parse(pasted);
+        if(!obj || typeof obj !== 'object') throw new Error('invalid');
+        Object.keys(obj).forEach(function(id){ nodesById[id] = obj[id]; });
+        persistLocalCache();
+        renderListView();
+        if(selectedId && nodesById[selectedId]) renderPanelContent(nodesById[selectedId]);
+        showToast('復元しました（' + Object.keys(obj).length + '件）');
+      }catch(e){
+        showToast('復元に失敗しました。テキストの形式を確認してください');
+      }
+    }, { multiline: true });
   });
 }
 bindDiagUI();
