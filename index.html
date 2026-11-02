@@ -12,30 +12,30 @@
   --font-body:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Hiragino Sans',Meiryo,sans-serif;
   --font-display:'Shippori Mincho B1','Hiragino Mincho ProN','Yu Mincho',serif;
 
-  --bg:#EDF0EA;
-  --bg-canvas:#E3E8E0;
-  --grid-dot:#C7D0C4;
-  --ink:#1C2321;
-  --ink-soft:#4B534D;
-  --line:#B9C2B4;
-  --panel-bg:#FBFCF9;
-  --card-bg:#FFFFFF;
-  --shadow:0 2px 10px rgba(28,35,33,0.10);
+  --bg:#111110;
+  --bg-canvas:#0C0C0C;
+  --grid-dot:#2B2B28;
+  --ink:#ECEAE2;
+  --ink-soft:#A3A099;
+  --line:#3A3A36;
+  --panel-bg:#171716;
+  --card-bg:#1B1B1A;
+  --shadow:0 0 0 rgba(0,0,0,0);
 
-  --accent-movement:#2C4B7C;
-  --accent-movement-good:#2E7D46;
-  --accent-movement-error:#B23A2E;
-  --accent-cause:#B5502D;
-  --accent-effect:#8A6D1C;
-  --accent-correction:#2E7D6B;
-  --accent-anatomy:#8C2F39;
-  --accent-physiology:#5B4B8A;
-  --accent-note:#736A55;
-  --accent-category:#5C6470;
-  --accent-training:#3D7A3E;
-  --accent-treatment:#2E6B8C;
+  --accent-movement:#D8402F;
+  --accent-movement-good:#D8402F;
+  --accent-movement-error:#D8402F;
+  --accent-cause:#D8402F;
+  --accent-effect:#D8402F;
+  --accent-correction:#D8402F;
+  --accent-anatomy:#D8402F;
+  --accent-physiology:#D8402F;
+  --accent-note:#D8402F;
+  --accent-category:#D8402F;
+  --accent-training:#D8402F;
+  --accent-treatment:#D8402F;
 
-  --danger:#A5311E;
+  --danger:#D8402F;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -690,6 +690,22 @@ button{font-family:inherit;}
 .inline-create .confirm{background:var(--ink);color:var(--bg);}
 .inline-create .cancel{background:transparent;color:var(--ink-soft);}
 
+/* ---- feature additions (video start / pin / logs / tag index) ---- */
+.field-group input[type=number],
+.field-group input[type=date]{
+  width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--line);
+  background:var(--card-bg);color:var(--ink);font-family:inherit;font-size:14px;
+}
+.pin-btn{
+  border:1px solid var(--line);background:transparent;color:var(--ink-soft);
+  border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer;
+}
+.pin-btn.active{background:var(--accent-effect);border-color:var(--accent-effect);color:#fff;}
+.log-item{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:var(--card-bg);}
+.log-date{font-size:11px;color:var(--ink-soft);font-weight:700;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;}
+.log-text{font-size:13px;line-height:1.55;white-space:pre-wrap;}
+.log-del{border:none;background:transparent;color:var(--ink-soft);cursor:pointer;font-size:12px;padding:0;}
+
 .danger-zone{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);}
 .done-btn{
   width:100%;
@@ -860,11 +876,34 @@ button{font-family:inherit;}
   margin:0 14px 14px;padding-top:12px;border-top:1px solid var(--line);
 }
 .diag-backup-label{font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;}
-#diag-export, #diag-import{
+#diag-export, #diag-import, #diag-compress, #diag-diff-export,
+#diag-export-file, #diag-diff-file-export, #diag-import-file{
   width:100%;padding:9px;border-radius:8px;margin-top:6px;
   border:1px solid var(--danger);background:transparent;color:var(--danger);
   font-size:13px;font-weight:700;cursor:pointer;
 }
+#diag-compress:disabled, #diag-diff-export:disabled{opacity:.5;cursor:default;}
+</style>
+
+<style>
+/* === DARK / SINGLE-ACCENT OVERRIDE (Moco redesign 2026-11-02) === */
+.node-card,.rel-overview-box,.rel-pair-side,#search-input,#legend,.branch-pill,
+.list-cat-chip-wrap,.list-cat-chip,.list-row,.media-thumb,.upload-btn,.yt-open-btn,
+input[type=text],input[type=number],input[type=date],.field-group textarea,.field-group select,.add-child-btn,
+.inline-create input,.inline-create button,.done-btn,.delete-btn,.tag-suggest,
+.tp-box,#tp-input,#tp-textarea,.tp-buttons button,.picker-box,.picker-head input,
+.picker-item,.diag-box,#diag-copy,#diag-force,#diag-export,#diag-import,#diag-compress,#diag-diff-export,
+#diag-export-file,#diag-diff-file-export,#diag-import-file,
+#gate-input,#gate-btn,#canvas-controls button,#media-viewer img,#media-viewer video,
+.pin-btn,.log-item,.log-del
+{border-radius:2px!important}
+.view-tabs,.view-tab,.filter-pill,.rel-overview-btn,.edit-mode-btn,.list-open-btn,
+.list-agg-close,.mini-tag,.cat-label,.chip,.chip-add,.mc-pill,.tag-input,.toast
+{border-radius:2px!important}
+#detail-panel{border-radius:0!important}
+.node-card,#legend,.rel-overview-box,.tp-box,.picker-box,.diag-box,#detail-panel,.toast,
+#gate-input,#gate-btn{box-shadow:none!important}
+.node-card{border:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -972,6 +1011,15 @@ button{font-family:inherit;}
       <div class="diag-backup-label">⚠️ 全データのバックアップ（保存の不具合に備えて）</div>
       <button id="diag-export" type="button">📤 全データをコピーする</button>
       <button id="diag-import" type="button">📥 貼り付けて復元する</button>
+    </div>
+    <div class="diag-backup-section">
+      <div class="diag-backup-label">🔄 同期を軽くする（画像を小さく／変更分だけを書き出し／ファイルで受け渡し）</div>
+      <button id="diag-compress" type="button">🗜 画像をまとめて圧縮する</button>
+      <button id="diag-diff-export" type="button">🔀 差分を書き出し</button>
+      <button id="diag-export-file" type="button">📁 ファイルで書き出し（全件）</button>
+      <button id="diag-diff-file-export" type="button">📁 差分をファイルで書き出し</button>
+      <button id="diag-import-file" type="button">📁 ファイルから読み込み</button>
+      <input type="file" id="import-file-input" accept=".json,application/json" class="sr-only">
     </div>
   </div>
 </div>
@@ -1095,6 +1143,7 @@ var listContentCreating = null;
 var listMethodFilter = [];
 var searchTypeFilter = [];
 var searchTagFilter = [];
+var tagListOpen = false;
 var editMode = true;
 try{ var savedEditMode = localStorage.getItem('ema_edit_mode'); if(savedEditMode === '0') editMode = false; }catch(e){}
 var listAggregateId = null;
@@ -1128,23 +1177,251 @@ function saveCollapsed(){
   try{ localStorage.setItem('ema_collapsed_v2', JSON.stringify(Array.from(collapsed))); }catch(e){}
 }
 
+/* recently viewed content pages — kept outside the node data so it never
+   leaks into exports; most recent first, capped at 10 */
+var RECENT_KEY = 'ema_recent_v1';
+function loadRecentIds(){
+  try{
+    var r = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(r) ? r : [];
+  }catch(e){ return []; }
+}
+function recordRecent(id){
+  var arr = loadRecentIds().filter(function(x){ return x !== id; });
+  arr.unshift(id);
+  arr = arr.slice(0, 10);
+  try{ localStorage.setItem(RECENT_KEY, JSON.stringify(arr)); }catch(e){}
+}
+
 var LOCAL_CACHE_KEY = 'ema_nodes_cache_v1';
+
+/* ---- 差分同期のための変更追跡 ----
+   persist のたびに、前回保存時のスナップショット（id→JSON文字列）と現状を
+   ノード単位で比較し、未同期の変更ノードIDを DIRTY_KEY に保持する。
+   スナップショットはメモリ上のみなので、再読み込み後の初回 persist では
+   全ノードを未同期とみなす。削除されたノードは差分に含めない
+   （取り込み側のマージでは削除を再現できないため）。 */
+var DIRTY_KEY = 'ema_dirty_v1';
+var dirtyNodeIds = (function(){
+  try{
+    var r = JSON.parse(localStorage.getItem(DIRTY_KEY) || '[]');
+    return new Set(Array.isArray(r) ? r : []);
+  }catch(e){ return new Set(); }
+})();
+var nodeSnapshot = null; // id -> JSON string, as of the last persist
+function saveDirtySet(){
+  try{ localStorage.setItem(DIRTY_KEY, JSON.stringify(Array.from(dirtyNodeIds))); }catch(e){}
+}
+function updateDirtyExportLabel(){
+  var b = document.getElementById('diag-diff-export');
+  if(b) b.textContent = '🔀 差分を書き出し（未同期 ' + dirtyNodeIds.size + '件）';
+  var fb = document.getElementById('diag-diff-file-export');
+  if(fb) fb.textContent = '📁 差分をファイルで書き出し（未同期 ' + dirtyNodeIds.size + '件）';
+}
+
+/* ---- ファイルでの受け渡し用ヘルパー ----
+   JSONオブジェクトをファイルとしてダウンロードさせる（iOS Safari 対応のため
+   Blob + URL.createObjectURL + a[download] を使う）。 */
+function atlasDateStamp(){
+  var d = new Date();
+  function p2(n){ return (n < 10 ? '0' : '') + n; }
+  return '' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate());
+}
+function downloadJsonFile(obj, filename){
+  var blob = new Blob([JSON.stringify(obj)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+}
+/* 貼り付け取り込みとファイル取り込みで共通のマージ処理。
+   idキーで nodesById にマージし、保存・再描画・トーストまで行う。 */
+function mergeImportedNodes(obj){
+  Object.keys(obj).forEach(function(id){ nodesById[id] = obj[id]; });
+  persistLocalCache();
+  renderListView();
+  if(selectedId && nodesById[selectedId]) renderPanelContent(nodesById[selectedId]);
+  showToast('復元しました（' + Object.keys(obj).length + '件）');
+}
+function trackDirtyNodes(){
+  var first = (nodeSnapshot === null);
+  var next = {};
+  Object.keys(nodesById).forEach(function(id){
+    var s = null;
+    try{ s = JSON.stringify(nodesById[id]); }catch(e){}
+    next[id] = s;
+    if(first || nodeSnapshot[id] !== s) dirtyNodeIds.add(id);
+  });
+  if(nodeSnapshot){
+    Object.keys(nodeSnapshot).forEach(function(id){
+      if(!(id in nodesById)) dirtyNodeIds.delete(id); // 削除は差分の対象外
+    });
+  }
+  nodeSnapshot = next;
+  saveDirtySet();
+  updateDirtyExportLabel();
+}
+
+/* ===================== storage: IndexedDB (localStorage fallback) =====================
+   ノードデータの保存先は IndexedDB（DB: ema_atlas_db / ストア: kv / キー: 'nodes'）。
+   上限が localStorage（5〜10MB程度）より桁違いに大きいため長期利用に耐える。
+   初回起動時に旧 localStorage キャッシュ（ema_nodes_cache_v1）があれば移行し、
+   書き込んで読み直して検証できたら旧キーを削除する。
+   IndexedDB が使えない環境（プライベートモード等）では従来通り localStorage に
+   保存・読み込みする動作へ自動で戻る。 */
+var IDB_NAME = 'ema_atlas_db';
+var IDB_STORE = 'kv';
+var IDB_NODES_KEY = 'nodes';
+var storageBackend = 'local'; // 'idb' | 'local'
+var storageStatus = 'localStorage（従来方式）';
+var storageBooting = true;    // 起動処理が終わるまでは保存しない（移行前の旧データを守る）
+var storageMigrated = false;
+var bootSettled = false;
+var idbDb = null;
+var idbWriteChain = Promise.resolve();
+var idbWriteWarned = false;
+
+function idbOpen(){
+  return new Promise(function(resolve, reject){
+    if(!window.indexedDB){ reject(new Error('indexedDB unavailable')); return; }
+    var req;
+    try{ req = indexedDB.open(IDB_NAME, 1); }catch(e){ reject(e); return; }
+    req.onupgradeneeded = function(){
+      if(!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = function(){ resolve(req.result); };
+    req.onerror = function(){ reject(req.error || new Error('idb open failed')); };
+    req.onblocked = function(){ reject(new Error('idb blocked')); };
+  });
+}
+function idbGet(db, key){
+  return new Promise(function(resolve, reject){
+    var req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+    req.onsuccess = function(){ resolve(req.result); };
+    req.onerror = function(){ reject(req.error || new Error('idb get failed')); };
+  });
+}
+function idbPut(db, key, value){
+  return new Promise(function(resolve, reject){
+    var tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = function(){ resolve(); };
+    tx.onerror = function(){ reject(tx.error || new Error('idb put failed')); };
+    tx.onabort = function(){ reject(tx.error || new Error('idb put aborted')); };
+  });
+}
+function readLegacyCache(){
+  try{
+    var raw = localStorage.getItem(LOCAL_CACHE_KEY);
+    if(raw){
+      var obj = JSON.parse(raw);
+      if(obj && typeof obj === 'object') return obj;
+    }
+  }catch(e){}
+  return null;
+}
+
 function persistLocalCache(){
+  trackDirtyNodes();
+  if(storageBooting) return; // 起動完了までは書き込まない（二重起動防止は settleBoot 側）
+  if(storageBackend === 'idb' && idbDb){
+    // 書き込みを直列化する。各書き込みは実行時点の最新の nodesById を保存するので、
+    // 連続して呼ばれても最後の状態が必ず IndexedDB に残る。
+    idbWriteChain = idbWriteChain.then(function(){
+      return idbPut(idbDb, IDB_NODES_KEY, nodesById);
+    }).catch(function(e){
+      if(!idbWriteWarned){
+        idbWriteWarned = true;
+        showToast('保存に失敗しました。書き出しでバックアップを取ることをお勧めします');
+      }
+    });
+    return;
+  }
   try{ localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nodesById)); }catch(e){
     showToast('保存容量が上限に近づいています。写真を減らすか、バックアップ後に古いページを整理してください');
   }
 }
 function loadLocalCache(){
-  try{
-    var raw = localStorage.getItem(LOCAL_CACHE_KEY);
-    if(raw){
-      var obj = JSON.parse(raw);
-      if(obj && typeof obj === 'object') nodesById = obj;
-    }
-  }catch(e){}
+  if(storageBackend === 'idb') return; // IndexedDB の場合は bootstrapStorage で読み込み済み
+  var obj = readLegacyCache();
+  if(obj) nodesById = obj;
 }
 
-/* ===================== init (pure local storage, no server sync) ===================== */
+function settleBoot(){
+  if(bootSettled) return false;
+  bootSettled = true;
+  return true;
+}
+function startAppAfterStorage(){
+  if(!settleBoot()) return;
+  storageBooting = false;
+  init();
+  if(storageMigrated) showToast('保存先をIndexedDBに移行しました（容量の上限が大きく広がりました）');
+}
+function fallbackToLocalStorage(reason){
+  if(!settleBoot()) return;
+  storageBackend = 'local';
+  storageStatus = 'localStorage（' + reason + '）';
+  idbDb = null;
+  storageBooting = false;
+  init();
+}
+function bootstrapStorage(){
+  showLoadingState('データを読み込んでいます…');
+  try{
+    if(navigator.storage && navigator.storage.persist) navigator.storage.persist();
+  }catch(e){}
+  setTimeout(function(){ fallbackToLocalStorage('読み込みに時間がかかっているため従来方式で継続'); }, 6000);
+  idbOpen().then(function(db){
+    idbDb = db;
+    return idbGet(db, IDB_NODES_KEY).then(function(stored){
+      if(stored && typeof stored === 'object' && Object.keys(stored).length > 0){
+        nodesById = stored;
+        storageBackend = 'idb';
+        storageStatus = 'IndexedDB（移行済み）';
+        // 旧キャッシュが残っていれば掃除する（IndexedDB 側が正）
+        try{
+          if(localStorage.getItem(LOCAL_CACHE_KEY)) localStorage.removeItem(LOCAL_CACHE_KEY);
+        }catch(e){}
+        startAppAfterStorage();
+        return;
+      }
+      var legacy = readLegacyCache();
+      if(!legacy){
+        nodesById = (stored && typeof stored === 'object') ? stored : {};
+        storageBackend = 'idb';
+        storageStatus = 'IndexedDB（新規）';
+        startAppAfterStorage();
+        return;
+      }
+      // 移行: IndexedDB に書き込み、読み直して件数を検証できたら旧キーを削除する
+      idbPut(db, IDB_NODES_KEY, legacy).then(function(){
+        return idbGet(db, IDB_NODES_KEY);
+      }).then(function(verify){
+        if(verify && typeof verify === 'object' && Object.keys(verify).length === Object.keys(legacy).length){
+          try{ localStorage.removeItem(LOCAL_CACHE_KEY); }catch(e){}
+          nodesById = verify;
+          storageBackend = 'idb';
+          storageStatus = 'IndexedDB（localStorageから移行完了）';
+          storageMigrated = true;
+          startAppAfterStorage();
+        } else {
+          fallbackToLocalStorage('移行の検証に失敗したため従来方式で継続');
+        }
+      }).catch(function(){
+        fallbackToLocalStorage('移行に失敗したため従来方式で継続');
+      });
+    });
+  }).catch(function(){
+    fallbackToLocalStorage('IndexedDBが使えないため従来方式で継続');
+  });
+}
+
+/* ===================== init (local only, no server sync; storage is prepared by bootstrapStorage) ===================== */
 function init(){
   loadCollapsed();
   loadLocalCache();
@@ -1330,6 +1607,41 @@ function getAllTags(){
   return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'ja'); });
 }
 
+function getTagCounts(){
+  var counts = {};
+  Object.keys(nodesById).forEach(function(id){
+    (nodesById[id].tags||[]).forEach(function(t){ counts[t] = (counts[t]||0) + 1; });
+  });
+  return counts;
+}
+function sortedTagsByCount(){
+  var counts = getTagCounts();
+  return Object.keys(counts).sort(function(a,b){
+    if(counts[b] !== counts[a]) return counts[b] - counts[a];
+    return a.localeCompare(b, 'ja');
+  }).map(function(t){ return { tag: t, count: counts[t] }; });
+}
+
+/* video start offset: YouTube takes ?t=秒, Vimeo takes #t=秒s */
+function formatStartSec(sec){
+  sec = parseInt(sec, 10) || 0;
+  if(sec <= 0) return '';
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return m > 0 ? (m + '分' + (s ? s + '秒' : '')) : (s + '秒');
+}
+function videoUrlWithStart(url, sec){
+  sec = parseInt(sec, 10) || 0;
+  if(!url || sec <= 0) return url;
+  if(/vimeo\.com/.test(url)){
+    return url.split('#')[0] + '#t=' + sec + 's';
+  }
+  if(/youtube\.com|youtu\.be/.test(url)){
+    if(/[?&]t=/.test(url)) return url.replace(/([?&])t=[^&]*/, '$1t=' + sec);
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + sec;
+  }
+  return url;
+}
+
 function renameTagEverywhere(oldTag, newTag){
   var count = 0;
   Object.keys(nodesById).forEach(function(id){
@@ -1392,6 +1704,67 @@ function fileToCompressedDataUrl(file){
     };
     reader.readAsDataURL(file);
   });
+}
+
+/* Re-encode an already-stored image data URL at a smaller size. Same canvas
+   approach as fileToCompressedDataUrl, but the input is a data URL instead of
+   a File. Used by the one-shot "compress all images" action (feature A). */
+var COMPRESS_MAX_DIM = 700;
+var COMPRESS_QUALITY = 0.6;
+function dataUrlToCompressedDataUrl(dataUrl, maxDim, quality){
+  return new Promise(function(resolve, reject){
+    var img = new Image();
+    img.onerror = function(){ reject(new Error('decode failed')); };
+    img.onload = function(){
+      var w = img.naturalWidth, h = img.naturalHeight;
+      if(!w || !h){ reject(new Error('empty image')); return; }
+      var scale = Math.min(1, maxDim / Math.max(w, h)); // never upscale
+      var cw = Math.max(1, Math.round(w * scale));
+      var ch = Math.max(1, Math.round(h * scale));
+      var canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, cw, ch);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
+/* Feature A: recompress every stored image in place. A failure (or a result
+   that would grow the data) leaves that image untouched; videos are skipped. */
+async function compressAllImages(){
+  var targets = [];
+  Object.keys(nodesById).forEach(function(id){
+    (nodesById[id].media || []).forEach(function(m){
+      if(m && m.kind === 'image' && typeof m.dataUrl === 'string' && m.dataUrl.indexOf('data:image/') === 0){
+        targets.push(m);
+      }
+    });
+  });
+  if(!targets.length){ showToast('圧縮できる画像がありません'); return; }
+  var before = 0, after = 0, replaced = 0;
+  targets.forEach(function(m){ before += m.dataUrl.length; });
+  for(var i=0;i<targets.length;i++){
+    var m = targets[i];
+    try{
+      var next = await dataUrlToCompressedDataUrl(m.dataUrl, COMPRESS_MAX_DIM, COMPRESS_QUALITY);
+      if(next && next.length < m.dataUrl.length){
+        m.dataUrl = next;
+        m.contentType = 'image/jpeg';
+        replaced++;
+      }
+    }catch(e){ /* keep the original image */ }
+    after += m.dataUrl.length;
+  }
+  if(replaced){
+    persistLocalCache();
+    renderListView();
+    if(selectedId && nodesById[selectedId]) renderPanelContent(nodesById[selectedId]);
+    showToast('画像を圧縮しました: ' + (before/1000000).toFixed(1) + 'MB → ' + (after/1000000).toFixed(1) + 'MB（' + replaced + '枚）');
+  } else {
+    showToast('すでに十分小さい画像ばかりでした（' + targets.length + '枚を確認）');
+  }
 }
 
 var MAX_VIDEO_BYTES = 4 * 1024 * 1024; // 4MB — localStorage's total quota (often ~5-10MB) can't realistically hold much more
@@ -1720,6 +2093,7 @@ function bindCanvasGestures(){
 /* ===================== detail panel (shared by map & list) ===================== */
 function openPanel(id){
   selectedId = id;
+  if(nodesById[id] && nodesById[id].kind === 'content') recordRecent(id);
   if(currentView === 'map') renderAll();
   renderPanelContent(nodesById[id]);
   $('#detail-panel').classList.add('open');
@@ -1782,6 +2156,22 @@ function renderPanelContent(node){
   titleGroup.appendChild(titleInput);
   body.appendChild(titleGroup);
 
+  // pin toggle — pinned pages are grouped at the top of the list view
+  if(!isRoot && node.kind === 'content'){
+    var pinGroup = el('div','field-group');
+    var pinBtn = el('button','pin-btn' + (node.pinned ? ' active' : ''));
+    pinBtn.type = 'button';
+    pinBtn.textContent = node.pinned ? '📌 ピン留め中（タップで解除）' : '📌 ピン留めする';
+    pinBtn.addEventListener('click', function(){
+      node.pinned = !node.pinned;
+      persistLocalCache();
+      renderPanelContent(node);
+      if(currentView === 'list') renderListView();
+    });
+    pinGroup.appendChild(pinBtn);
+    body.appendChild(pinGroup);
+  }
+
   // note
   if((!isCategory || !isRoot) && node.type !== 'treatmentMethod'){
     var noteGroup = el('div','field-group');
@@ -1838,9 +2228,24 @@ function renderPanelContent(node){
     ytInput.readOnly = !editMode;
     var ytOpenBtn = el('a','yt-open-btn'); ytOpenBtn.target='_blank'; ytOpenBtn.rel='noopener';
     ytOpenBtn.textContent = '▶ 動画リンクを開く';
+    var startLabel = el('label'); startLabel.textContent = '動画開始（秒）';
+    startLabel.style.marginTop = '10px';
+    var startInput = el('input'); startInput.type='number'; startInput.min='0'; startInput.step='1';
+    startInput.placeholder = '例: 90（＝1分30秒から再生）';
+    startInput.value = (node.videoStart != null && node.videoStart !== '') ? node.videoStart : '';
+    startInput.readOnly = !editMode;
+    function currentStart(){
+      var s = parseInt(startInput.value, 10);
+      return (isNaN(s) || s < 0) ? 0 : s;
+    }
     function updateYtBtn(){
       var v = ytInput.value.trim();
-      if(v){ ytOpenBtn.href = v; ytOpenBtn.style.display = 'inline-flex'; }
+      var sec = currentStart();
+      if(v){
+        ytOpenBtn.href = videoUrlWithStart(v, sec);
+        ytOpenBtn.textContent = '▶ 動画リンクを開く' + (sec > 0 ? '（' + formatStartSec(sec) + 'から再生）' : '');
+        ytOpenBtn.style.display = 'inline-flex';
+      }
       else{ ytOpenBtn.removeAttribute('href'); ytOpenBtn.style.display = 'none'; }
     }
     updateYtBtn();
@@ -1848,7 +2253,13 @@ function renderPanelContent(node){
       debouncedUpdate(node.id, 'youtubeUrl', ytInput.value.trim());
       updateYtBtn();
     });
+    startInput.addEventListener('input', function(){
+      debouncedUpdate(node.id, 'videoStart', startInput.value.trim() === '' ? '' : currentStart());
+      updateYtBtn();
+    });
     ytGroup.appendChild(ytInput);
+    ytGroup.appendChild(startLabel);
+    ytGroup.appendChild(startInput);
     ytGroup.appendChild(ytOpenBtn);
     body.appendChild(ytGroup);
   }
@@ -2195,6 +2606,114 @@ function renderPanelContent(node){
     body.appendChild(childGroup);
   }
 
+  // practice logs — added/removed right here in the panel (not via a form screen)
+  if(node.kind === 'content'){
+    var logGroup = el('div','field-group');
+    logGroup.appendChild(labelEl('実践メモ'));
+    var logs = Array.isArray(node.logs) ? node.logs : [];
+    if(logs.length){
+      logs.forEach(function(lg, idx){
+        var item = el('div','log-item');
+        var dRow = el('div','log-date');
+        var dSpan = el('span'); dSpan.textContent = lg.date || '';
+        dRow.appendChild(dSpan);
+        if(editMode){
+          var del = el('button','log-del'); del.type='button'; del.textContent='✕ 削除';
+          del.addEventListener('click', function(i2){ return function(){
+            var arr = (node.logs||[]).slice();
+            arr.splice(i2, 1);
+            node.logs = arr;
+            persistLocalCache();
+            renderPanelContent(node);
+          }; }(idx));
+          dRow.appendChild(del);
+        }
+        item.appendChild(dRow);
+        var tx = el('div','log-text'); tx.textContent = lg.text || '';
+        item.appendChild(tx);
+        logGroup.appendChild(item);
+      });
+    } else {
+      var noLog = el('div','root-note'); noLog.textContent = 'まだ実践メモはありません。';
+      logGroup.appendChild(noLog);
+    }
+    if(editMode){
+      var logDate = el('input'); logDate.type='date';
+      var today = new Date();
+      var pad2 = function(n){ return (n < 10 ? '0' : '') + n; };
+      logDate.value = today.getFullYear() + '-' + pad2(today.getMonth()+1) + '-' + pad2(today.getDate());
+      var logText = el('textarea'); logText.placeholder = 'いつ・誰に使ってどうだったか、など';
+      logText.addEventListener('input', function(){ autoGrow(logText); });
+      var logAddBtn = el('button','chip-add'); logAddBtn.type='button'; logAddBtn.textContent='＋ 実践メモを追加';
+      logAddBtn.style.marginTop = '6px';
+      logAddBtn.addEventListener('click', function(){
+        var text = logText.value.trim();
+        if(!text){ showToast('メモの内容を入力してください'); return; }
+        var arr = (node.logs||[]).slice();
+        arr.unshift({ date: logDate.value || '', text: text });
+        node.logs = arr;
+        persistLocalCache();
+        renderPanelContent(node);
+        showToast('実践メモを追加しました');
+      });
+      logGroup.appendChild(logDate);
+      logGroup.appendChild(logText);
+      logGroup.appendChild(logAddBtn);
+      autoGrow(logText);
+    }
+    body.appendChild(logGroup);
+  }
+
+  // auto related candidates — other content pages sharing at least one tag,
+  // most overlap first; one tap links both directions via addRelation()
+  if(node.kind === 'content' && !isRoot){
+    var myTags = node.tags || [];
+    if(myTags.length){
+      var relSet = {};
+      (node.relatedIds||[]).forEach(function(r){ relSet[r] = true; });
+      var cands = Object.keys(nodesById).map(function(id){ return nodesById[id]; })
+        .filter(function(n){ return n.kind === 'content' && n.id !== node.id && !relSet[n.id]; })
+        .map(function(n){
+          var shared = (n.tags||[]).filter(function(t){ return myTags.indexOf(t) !== -1; });
+          return { node: n, shared: shared };
+        })
+        .filter(function(c){ return c.shared.length > 0; })
+        .sort(function(a, b){
+          if(b.shared.length !== a.shared.length) return b.shared.length - a.shared.length;
+          return (a.node.title||'').localeCompare(b.node.title||'', 'ja');
+        })
+        .slice(0, 5);
+      if(cands.length){
+        var candGroup = el('div','field-group');
+        candGroup.appendChild(labelEl('関連候補（タグが重なるページ）'));
+        cands.forEach(function(c){
+          var row = el('div','chip-row'); row.style.marginBottom = '6px';
+          var chip = el('span','chip');
+          var clbl = el('span'); clbl.textContent = c.node.title || '(無題)';
+          chip.appendChild(clbl);
+          chip.addEventListener('click', function(cid){ return function(){ openPanel(cid); }; }(c.node.id));
+          row.appendChild(chip);
+          var tagNote = el('span');
+          tagNote.style.cssText = 'font-size:11px;color:var(--ink-soft);align-self:center;';
+          tagNote.textContent = '共通タグ: ' + c.shared.map(function(t){ return '#' + t; }).join(' ');
+          row.appendChild(tagNote);
+          if(editMode){
+            var addBtn = el('button','chip-add'); addBtn.type='button'; addBtn.textContent='関連に追加';
+            addBtn.addEventListener('click', function(cid){ return function(){
+              addRelation(node.id, cid);
+              renderPanelContent(nodesById[node.id]);
+              if(currentView === 'list') renderListView();
+              showToast('関連に追加しました');
+            }; }(c.node.id));
+            row.appendChild(addBtn);
+          }
+          candGroup.appendChild(row);
+        });
+        body.appendChild(candGroup);
+      }
+    }
+  }
+
   // done
   var doneBtn = el('button','done-btn'); doneBtn.type='button';
   doneBtn.textContent = editMode ? '✓ 完了（保存して閉じる）' : '閉じる';
@@ -2347,7 +2866,7 @@ function renderSearchResults(){
   var wrap = $('#list-crumbs');
   wrap.innerHTML = '';
   var hint = el('div','list-search-hint');
-  hint.textContent = '「' + searchQuery + '」の検索結果';
+  hint.textContent = searchQuery ? ('「' + searchQuery + '」の検索結果') : 'タグで絞り込み中（チップの✕で解除できます）';
   wrap.appendChild(hint);
 
   var typeFilterRow = el('div','mc-filter-row');
@@ -2376,7 +2895,8 @@ function renderSearchResults(){
     var x = el('button','chip-x'); x.textContent='✕';
     x.addEventListener('click', function(t2){ return function(){
       searchTagFilter = searchTagFilter.filter(function(x2){ return x2!==t2; });
-      renderSearchResults();
+      if(!searchQuery && !searchTagFilter.length) renderListView();
+      else renderSearchResults();
     }; }(tg));
     chip.appendChild(x);
     tagFilterChips.appendChild(chip);
@@ -2421,6 +2941,33 @@ function renderSearchResults(){
   tagFilterWrap.appendChild(tagFilterChips);
   wrap.appendChild(tagFilterWrap);
 
+  // full tag index — every tag with its page count, most used first;
+  // tapping one adds it to the tag filter above
+  var allTags = sortedTagsByCount();
+  if(allTags.length){
+    var tagIndexWrap = el('div','tag-filter-wrap');
+    var tagIndexToggle = el('button','mc-filter-clear'); tagIndexToggle.type = 'button';
+    tagIndexToggle.textContent = tagListOpen ? '✕ タグ一覧を閉じる' : ('タグ一覧（全' + allTags.length + '件）を開く');
+    tagIndexToggle.addEventListener('click', function(){ tagListOpen = !tagListOpen; renderSearchResults(); });
+    tagIndexWrap.appendChild(tagIndexToggle);
+    if(tagListOpen){
+      var tagIndexRow = el('div','chip-row');
+      tagIndexRow.style.marginTop = '6px';
+      allTags.forEach(function(entry){
+        if(searchTagFilter.indexOf(entry.tag) !== -1) return;
+        var chip = el('span','chip');
+        chip.textContent = '#' + entry.tag + '（' + entry.count + '）';
+        chip.addEventListener('click', function(t){ return function(){
+          if(searchTagFilter.indexOf(t) === -1) searchTagFilter.push(t);
+          renderSearchResults();
+        }; }(entry.tag));
+        tagIndexRow.appendChild(chip);
+      });
+      tagIndexWrap.appendChild(tagIndexRow);
+    }
+    wrap.appendChild(tagIndexWrap);
+  }
+
   var itemsWrap = $('#list-items');
   itemsWrap.innerHTML = '';
   var results = Object.keys(nodesById)
@@ -2463,8 +3010,81 @@ function renderSearchResults(){
   });
 }
 
+/* a simple navigable row (breadcrumb + type + title + tags), reused by the
+   pinned / recently-viewed shortcut sections */
+function buildNavRow(n){
+  var meta = TYPE_META[n.type] || TYPE_META.note;
+  var row = el('div','list-row');
+  row.style.setProperty('--type-color', 'var(' + meta.cssVar + ')');
+  var col = el('div','list-row-main');
+  var cr = el('div','list-row-crumb'); cr.textContent = fullBreadcrumb(n);
+  col.appendChild(cr);
+  var titleRow = el('div','list-row-title-row');
+  var tag = el('span','list-row-tag'); tag.textContent = meta.label;
+  var t = el('span','list-row-title'); t.textContent = n.title || '(無題)';
+  titleRow.appendChild(tag); titleRow.appendChild(t);
+  col.appendChild(titleRow);
+  if(n.tags && n.tags.length){
+    var tagsRow = el('div','list-row-tags');
+    n.tags.forEach(function(tg){ var c = el('span','mini-tag'); c.textContent = '#' + tg; tagsRow.appendChild(c); });
+    col.appendChild(tagsRow);
+  }
+  row.appendChild(col);
+  if(n.media && n.media.length){ var mm = el('span','list-row-meta'); mm.textContent = '📎' + n.media.length; row.appendChild(mm); }
+  row.addEventListener('click', function(id){ return function(){ openPanel(id); }; }(n.id));
+  return row;
+}
+
+/* shortcut sections shown on the plain list view: pinned pages, recently
+   viewed pages, and the full tag index (tap a tag to filter by it) */
+function renderShortcutSections(wrap){
+  var pinned = Object.keys(nodesById).map(function(id){ return nodesById[id]; })
+    .filter(function(n){ return n.pinned && n.kind === 'content'; })
+    .sort(function(a, b){ return (a.title||'').localeCompare(b.title||'', 'ja'); });
+  if(pinned.length){
+    var pw = el('div','list-level');
+    pw.appendChild(labelEl2('📌 ピン留め'));
+    pinned.forEach(function(n){ pw.appendChild(buildNavRow(n)); });
+    wrap.appendChild(pw);
+  }
+
+  var recent = loadRecentIds().map(function(id){ return nodesById[id]; })
+    .filter(function(n){ return n && n.kind === 'content'; });
+  if(recent.length){
+    var rw = el('div','list-level');
+    rw.appendChild(labelEl2('最近見た'));
+    recent.forEach(function(n){ rw.appendChild(buildNavRow(n)); });
+    wrap.appendChild(rw);
+  }
+
+  var allTags = sortedTagsByCount();
+  if(allTags.length){
+    var tagWrap = el('div','list-level');
+    tagWrap.appendChild(labelEl2('タグ'));
+    var toggle = el('button','mc-filter-clear'); toggle.type = 'button';
+    toggle.textContent = tagListOpen ? '✕ タグ一覧を閉じる' : ('タグ一覧（全' + allTags.length + '件）を開く');
+    toggle.addEventListener('click', function(){ tagListOpen = !tagListOpen; renderListView(); });
+    tagWrap.appendChild(toggle);
+    if(tagListOpen){
+      var chipsRow = el('div','chip-row');
+      chipsRow.style.marginTop = '6px';
+      allTags.forEach(function(entry){
+        var chip = el('span','chip');
+        chip.textContent = '#' + entry.tag + '（' + entry.count + '）';
+        chip.addEventListener('click', function(t){ return function(){
+          searchTagFilter = [t];
+          renderListView();
+        }; }(entry.tag));
+        chipsRow.appendChild(chip);
+      });
+      tagWrap.appendChild(chipsRow);
+    }
+    wrap.appendChild(tagWrap);
+  }
+}
+
 function renderListView(){
-  if(searchQuery){ renderSearchResults(); return; }
+  if(searchQuery || searchTagFilter.length){ renderSearchResults(); return; }
   var wrap = $('#list-crumbs');
   wrap.innerHTML = '';
 
@@ -2491,6 +3111,8 @@ function renderListView(){
     renderListView();
   });
   wrap.appendChild(branchAggBtn);
+
+  renderShortcutSections(wrap);
 
   var branch = listState.branch;
   var chain = LEVEL_CHAIN[branch];
@@ -2909,7 +3531,10 @@ function buildDiagText(){
     'localStorage自己テスト: ' + LS_TEST,
     'location.href: ' + location.href,
     '現在保存されているノード数: ' + Object.keys(nodesById).length,
-    'localStorage保存済みキャッシュの有無: ' + (lsRaw ? ('あり (' + lsRaw.length + '文字)') : 'なし'),
+    '未同期の変更ノード数: ' + dirtyNodeIds.size,
+    '保存先: ' + (storageBackend === 'idb' ? 'IndexedDB (ema_atlas_db)' : 'localStorage'),
+    '保存先の状態: ' + storageStatus,
+    'localStorage旧キャッシュの有無: ' + (lsRaw ? ('あり (' + lsRaw.length + '文字)') : 'なし'),
     'UserAgent: ' + navigator.userAgent
   ];
   return lines.join('\n');
@@ -2951,6 +3576,92 @@ function bindDiagUI(){
       showToast('このブラウザではコピー機能が使えません');
     }
   });
+  /* Feature A: compress all stored images in place */
+  $('#diag-compress').addEventListener('click', async function(){
+    var b = this;
+    if(b.disabled) return;
+    b.disabled = true;
+    var orig = b.textContent;
+    b.textContent = '圧縮中…';
+    try{ await compressAllImages(); }
+    catch(e){ showToast('圧縮に失敗しました'); }
+    finally{ b.disabled = false; b.textContent = orig; }
+  });
+
+  /* Feature B: copy only the unsynced (dirty) nodes, then clear the set */
+  $('#diag-diff-export').addEventListener('click', function(){
+    var out = {};
+    var n = 0;
+    dirtyNodeIds.forEach(function(id){
+      if(nodesById[id]){ out[id] = nodesById[id]; n++; }
+    });
+    if(!n){
+      dirtyNodeIds.clear(); saveDirtySet(); updateDirtyExportLabel();
+      showToast('未同期の変更はありません');
+      return;
+    }
+    if(!(navigator.clipboard && navigator.clipboard.writeText)){
+      showToast('このブラウザではコピー機能が使えません');
+      return;
+    }
+    var dump = JSON.stringify(out);
+    navigator.clipboard.writeText(dump).then(function(){
+      dirtyNodeIds.clear();
+      saveDirtySet();
+      updateDirtyExportLabel();
+      showToast('差分をコピーしました（' + n + '件）。もう一方の端末で「貼り付けて復元する」から取り込んでください');
+    }).catch(function(){ showToast('コピーに失敗しました'); });
+  });
+  updateDirtyExportLabel();
+
+  /* ファイルで書き出し（全件）: JSONをファイルとしてダウンロードさせる */
+  $('#diag-export-file').addEventListener('click', function(){
+    downloadJsonFile(nodesById, 'atlas-backup-' + atlasDateStamp() + '.json');
+    showToast('全データをファイルに書き出しました（' + Object.keys(nodesById).length + '件）。AirDropやファイルアプリで、もう一方の端末へ渡してください');
+  });
+
+  /* 差分をファイルで書き出し: 未同期ノードだけをファイル化し、dirty をクリアする */
+  $('#diag-diff-file-export').addEventListener('click', function(){
+    var out = {};
+    var n = 0;
+    dirtyNodeIds.forEach(function(id){
+      if(nodesById[id]){ out[id] = nodesById[id]; n++; }
+    });
+    if(!n){
+      dirtyNodeIds.clear(); saveDirtySet(); updateDirtyExportLabel();
+      showToast('未同期の変更はありません');
+      return;
+    }
+    downloadJsonFile(out, 'atlas-diff-' + atlasDateStamp() + '.json');
+    dirtyNodeIds.clear();
+    saveDirtySet();
+    updateDirtyExportLabel();
+    showToast('差分をファイルに書き出しました（' + n + '件）。もう一方の端末で「ファイルから読み込み」から取り込んでください');
+  });
+
+  /* ファイルから読み込み: 選択したJSONファイルを貼り付け取り込みと同じマージで取り込む */
+  var importFileInput = $('#import-file-input');
+  $('#diag-import-file').addEventListener('click', function(){
+    importFileInput.click();
+  });
+  importFileInput.addEventListener('change', function(){
+    var file = importFileInput.files && importFileInput.files[0];
+    importFileInput.value = ''; // 同じファイルを連続で選んでも change が発火するようリセット
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var obj = JSON.parse(String(reader.result || ''));
+        if(!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('invalid');
+        mergeImportedNodes(obj);
+      }catch(e){
+        showToast('復元に失敗しました。ファイルの形式を確認してください');
+      }
+    };
+    reader.onerror = function(){ showToast('ファイルの読み込みに失敗しました'); };
+    reader.readAsText(file);
+  });
+
   $('#diag-import').addEventListener('click', function(){
     inlinePrompt('バックアップのテキストを貼り付けてください（貼り付けると今のデータに上書き・追加されます）', '', function(pasted){
       pasted = (pasted||'').trim();
@@ -2958,11 +3669,7 @@ function bindDiagUI(){
       try{
         var obj = JSON.parse(pasted);
         if(!obj || typeof obj !== 'object') throw new Error('invalid');
-        Object.keys(obj).forEach(function(id){ nodesById[id] = obj[id]; });
-        persistLocalCache();
-        renderListView();
-        if(selectedId && nodesById[selectedId]) renderPanelContent(nodesById[selectedId]);
-        showToast('復元しました（' + Object.keys(obj).length + '件）');
+        mergeImportedNodes(obj);
       }catch(e){
         showToast('復元に失敗しました。テキストの形式を確認してください');
       }
@@ -3001,7 +3708,7 @@ var GATE_KEY = 'ema_gate_ok_v1';
   setTimeout(function(){ input.focus(); }, 100);
 })();
 
-init();
+bootstrapStorage();
 })();
 </script>
 </body>
