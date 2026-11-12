@@ -34,6 +34,8 @@
   --accent-category:#D8402F;
   --accent-training:#D8402F;
   --accent-treatment:#D8402F;
+  --accent-memo:#6EA8FF;
+  --accent-kb:#5FC98B;
 
   --danger:#D8402F;
 }
@@ -61,6 +63,8 @@
     --accent-category:#9AA3AC;
     --accent-training:#5FAF63;
     --accent-treatment:#5B9BC4;
+    --accent-memo:#6EA8FF;
+    --accent-kb:#5FC98B;
   }
 }
 :root[data-theme="dark"]{
@@ -883,6 +887,29 @@ button{font-family:inherit;}
   font-size:13px;font-weight:700;cursor:pointer;
 }
 #diag-compress:disabled, #diag-diff-export:disabled{opacity:.5;cursor:default;}
+/* === v5: main tabs / memo & knowledge cards / link map === */
+#main-tabs{display:flex;gap:2px;background:var(--bg-canvas);border-radius:999px;padding:2px;margin:8px 12px 0;align-self:flex-start;}
+.main-tab{border:0;background:transparent;color:var(--ink-soft);font-size:13px;font-weight:700;padding:7px 18px;border-radius:999px;cursor:pointer;}
+.main-tab.active{background:var(--card-bg);color:var(--ink);box-shadow:var(--shadow);}
+.kind-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;color:#0E0E0E;flex:0 0 auto;}
+.kind-badge.kb-memo{background:var(--accent-memo);}
+.kind-badge.kb-knowledge{background:var(--accent-kb);}
+.kind-badge.kb-content{background:var(--accent-note);color:#FFF;}
+.card-meta-line{font-size:11px;color:var(--ink-soft);margin-top:2px;}
+.card-excerpt{font-size:12px;color:var(--ink-soft);margin-top:4px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;}
+.card-links{font-size:11px;color:var(--ink-soft);margin-top:4px;}
+#card-head{padding:10px 14px 0;}
+.card-head-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.card-head-title{font-size:15px;font-weight:800;}
+.card-head-count{font-size:12px;color:var(--ink-soft);}
+.card-add-btn{margin-left:auto;border:1px solid var(--line);background:var(--card-bg);color:var(--ink);font-size:12px;font-weight:700;border-radius:999px;padding:6px 14px;cursor:pointer;}
+.card-tag-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.link-map-wrap{display:flex;justify-content:center;padding:4px 0;}
+.link-map-wrap svg{max-width:100%;height:auto;}
+.link-map-node{cursor:pointer;}
+.link-map-caption{font-size:11px;color:var(--ink-soft);text-align:center;margin-top:2px;}
+.meta-fields-row{display:flex;gap:8px;}
+.meta-fields-row .field-group{flex:1;}
 </style>
 
 <style>
@@ -898,7 +925,8 @@ input[type=text],input[type=number],input[type=date],.field-group textarea,.fiel
 .pin-btn,.log-item,.log-del
 {border-radius:2px!important}
 .view-tabs,.view-tab,.filter-pill,.rel-overview-btn,.edit-mode-btn,.list-open-btn,
-.list-agg-close,.mini-tag,.cat-label,.chip,.chip-add,.mc-pill,.tag-input,.toast
+.list-agg-close,.mini-tag,.cat-label,.chip,.chip-add,.mc-pill,.tag-input,.toast,
+#main-tabs,.main-tab,.kind-badge,.card-add-btn
 {border-radius:2px!important}
 #detail-panel{border-radius:0!important}
 .node-card,#legend,.rel-overview-box,.tp-box,.picker-box,.diag-box,#detail-panel,.toast,
@@ -933,10 +961,21 @@ input[type=text],input[type=number],input[type=date],.field-group textarea,.fiel
     </div>
   </header>
 
+  <div id="main-tabs">
+    <button type="button" class="main-tab active" data-main-tab="atlas">種目</button>
+    <button type="button" class="main-tab" data-main-tab="memo">学びメモ</button>
+    <button type="button" class="main-tab" data-main-tab="knowledge">基礎</button>
+  </div>
+
   <div id="list-view">
     <div id="empty-state" hidden>読み込み中…</div>
     <div id="list-crumbs"></div>
     <div class="list-items" id="list-items"></div>
+  </div>
+
+  <div id="card-view" hidden>
+    <div id="card-head"></div>
+    <div class="list-items" id="card-items"></div>
   </div>
 
 </div>
@@ -1058,7 +1097,13 @@ var TYPE_META = {
   note:       { label:'メモ',         cssVar:'--accent-note' },
   trainingMethod:  { label:'練習法', cssVar:'--accent-training' },
   treatmentMethod: { label:'治療法', cssVar:'--accent-treatment' },
-  classification:  { label:'分類',   cssVar:'--accent-physiology' }
+  classification:  { label:'分類',   cssVar:'--accent-physiology' },
+  learningMemo: { label:'学びメモ', cssVar:'--accent-memo' },
+  kbDisease:    { label:'疾患',     cssVar:'--accent-kb' },
+  kbAnatomy:    { label:'解剖',     cssVar:'--accent-kb' },
+  kbPhysiology: { label:'生理',     cssVar:'--accent-kb' },
+  kbTest:       { label:'検査・所見', cssVar:'--accent-kb' },
+  kbOther:      { label:'基礎',     cssVar:'--accent-kb' }
 };
 var MOVEMENT_TYPES = ['movementGood','movementError','movementBoth'];
 var DETAIL_TYPES = ['cause','effect','correction','anatomy','physiology','note'];
@@ -1080,7 +1125,7 @@ var TYPE_ORDER = MOVEMENT_TYPES.concat(DETAIL_TYPES).concat(['classification']);
 
 var BRANCH_META = {
   competitive: { label:'競技動作' },
-  general:     { label:'一般の外傷障害' },
+  general:     { label:'疾患' },
   training:    { label:'練習法' },
   treatment:   { label:'治療法' }
 };
@@ -1099,7 +1144,7 @@ var LEVEL_CHAIN = {
 };
 var LEVEL_LABEL = {
   sport:'競技', scene:'ポジション/場面',
-  bodypart:'部位', injury:'外傷障害', subclass:'細かい分類'
+  bodypart:'部位', injury:'疾患', subclass:'細かい分類'
 };
 var BRANCH_CONTENT_TYPES = {
   competitive: MOVEMENT_TYPES,
@@ -1132,6 +1177,10 @@ var selectedId = null;
 var categoryFilter = 'all';
 var searchQuery = '';
 var currentView = 'list';
+var mainTab = 'atlas';
+try{ var savedMainTab = localStorage.getItem('ema_main_tab'); if(savedMainTab === 'memo' || savedMainTab === 'knowledge') mainTab = savedMainTab; }catch(e){}
+var cardTagFilter = { memo: [], knowledge: [] };
+var KB_TYPES = ['kbDisease','kbAnatomy','kbPhysiology','kbTest','kbOther'];
 var pan = { x: 0, y: 0 };
 var zoom = 1;
 var isDragging = false;
@@ -1565,7 +1614,7 @@ function collectDescendantIds(id){
 
 function deleteNode(id){
   var node = nodesById[id];
-  if(!node || node.parentId === null) return;
+  if(!node || (node.parentId === null && node.kind !== 'memo' && node.kind !== 'knowledge')) return;
   var toDelete = [id].concat(collectDescendantIds(id));
   var toDeleteSet = new Set(toDelete);
 
@@ -1610,7 +1659,9 @@ function getAllTags(){
 function getTagCounts(){
   var counts = {};
   Object.keys(nodesById).forEach(function(id){
-    (nodesById[id].tags||[]).forEach(function(t){ counts[t] = (counts[t]||0) + 1; });
+    var n = nodesById[id];
+    if(n.kind !== 'content' && n.kind !== 'category') return;
+    (n.tags||[]).forEach(function(t){ counts[t] = (counts[t]||0) + 1; });
   });
   return counts;
 }
@@ -2093,6 +2144,11 @@ function bindCanvasGestures(){
 /* ===================== detail panel (shared by map & list) ===================== */
 function openPanel(id){
   selectedId = id;
+  var ndOpen = nodesById[id];
+  if(ndOpen){
+    var wantTab = ndOpen.kind === 'memo' ? 'memo' : ndOpen.kind === 'knowledge' ? 'knowledge' : 'atlas';
+    if(wantTab !== mainTab){ applyMainTab(wantTab); renderListView(); }
+  }
   if(nodesById[id] && nodesById[id].kind === 'content') recordRecent(id);
   if(currentView === 'map') renderAll();
   renderPanelContent(nodesById[id]);
@@ -2114,6 +2170,7 @@ function renderPanelContent(node){
     $('#p-body').innerHTML = '<div class="root-note">読み込み中…</div>';
     return;
   }
+  if(node.kind === 'memo' || node.kind === 'knowledge'){ renderCardPanel(node); return; }
   var isRoot = node.parentId === null;
   var isCategory = node.kind === 'category';
   var meta = typeMetaOf(node);
@@ -2540,12 +2597,18 @@ function renderPanelContent(node){
   if(MOVEMENT_TYPES.indexOf(node.type) !== -1 || node.type === 'classification' || isInjuryCategory){
     [buildRelatedGroup('関連する練習法・ドリル', ['trainingMethod'], '練習法'),
      buildRelatedGroup('関連する治療法', ['treatmentMethod'], '治療法'),
+     buildRelatedGroup('関連する学びメモ・基礎', ['learningMemo'].concat(KB_TYPES), null),
      buildRelatedGroup('その他の関連ページ', TYPE_ORDER.filter(function(t){ return t!=='trainingMethod' && t!=='treatmentMethod'; }), null)
     ].forEach(function(g){ if(g) body.appendChild(g); });
   } else {
-    var g = buildRelatedGroup('関連ページ', null, null);
+    var g = buildRelatedGroup('関連ページ', TYPE_ORDER.concat(['trainingMethod','treatmentMethod']), null);
     if(g) body.appendChild(g);
+    var gKb = buildRelatedGroup('関連する学びメモ・基礎', ['learningMemo'].concat(KB_TYPES), null);
+    if(gKb) body.appendChild(gKb);
   }
+
+  var lmGroupC = buildLinkMapGroup(node);
+  if(lmGroupC) body.appendChild(lmGroupC);
 
   // add child — only category nodes need this (movement pages hold their detail as fields, not child pages)
   if(isCategory && editMode && nextStepFor(node).kind !== 'none'){
@@ -2672,7 +2735,7 @@ function renderPanelContent(node){
       var relSet = {};
       (node.relatedIds||[]).forEach(function(r){ relSet[r] = true; });
       var cands = Object.keys(nodesById).map(function(id){ return nodesById[id]; })
-        .filter(function(n){ return n.kind === 'content' && n.id !== node.id && !relSet[n.id]; })
+        .filter(function(n){ return (n.kind === 'content' || n.kind === 'memo' || n.kind === 'knowledge') && n.id !== node.id && !relSet[n.id]; })
         .map(function(n){
           var shared = (n.tags||[]).filter(function(t){ return myTags.indexOf(t) !== -1; });
           return { node: n, shared: shared };
@@ -2804,7 +2867,7 @@ function openPicker(fromId, typeFilter, headTitle){
     var items = Object.keys(nodesById)
       .map(function(id){ return nodesById[id]; })
       .filter(function(n){ return !already.has(n.id); })
-      .filter(function(n){ return n.kind === 'content'; })
+      .filter(function(n){ return n.kind === 'content' || n.kind === 'memo' || n.kind === 'knowledge'; })
       .filter(function(n){ return !typeFilter || typeFilter.indexOf(n.type) !== -1; })
       .filter(function(n){ return !q || (n.title||'').toLowerCase().indexOf(q.toLowerCase())!==-1; });
     items.forEach(function(n){
@@ -2812,7 +2875,7 @@ function openPicker(fromId, typeFilter, headTitle){
       var item = el('div','picker-item');
       var t = el('div','pi-title'); t.textContent = n.title || '(無題)';
       var mtext = el('div','pi-meta');
-      mtext.textContent = meta.label + ' ・ ' + fullBreadcrumb(n);
+      mtext.textContent = meta.label + ' ・ ' + (n.kind === 'memo' ? (n.learnedAt || '学びメモ') : n.kind === 'knowledge' ? '基礎情報' : fullBreadcrumb(n));
       mtext.style.color = cssColor(meta.cssVar);
       item.appendChild(t); item.appendChild(mtext);
       item.addEventListener('click', function(){
@@ -3084,6 +3147,9 @@ function renderShortcutSections(wrap){
 }
 
 function renderListView(){
+  if(mainTab === 'memo' || mainTab === 'knowledge'){ renderCardList(mainTab); return; }
+  var cv = $('#card-view'); if(cv) cv.hidden = true;
+  var lv = $('#list-view'); if(lv) lv.hidden = false;
   if(searchQuery || searchTagFilter.length){ renderSearchResults(); return; }
   var wrap = $('#list-crumbs');
   wrap.innerHTML = '';
@@ -3442,6 +3508,11 @@ function bindUI(){
     }, 220);
   });
 
+  document.querySelectorAll('.main-tab').forEach(function(b){
+    b.classList.toggle('active', b.dataset.mainTab === mainTab);
+    b.addEventListener('click', function(){ switchMainTab(b.dataset.mainTab); });
+  });
+
   $('#p-close').addEventListener('click', closePanel);
   $('#backdrop').addEventListener('click', closePanel);
   $('#mv-close').addEventListener('click', function(){ $('#media-viewer').classList.remove('show'); });
@@ -3467,6 +3538,512 @@ function applyEditModeUI(){
   var btn = $('#edit-mode-btn');
   btn.textContent = editMode ? '✏️ 編集モード' : '👁 閲覧モード';
   btn.classList.toggle('view-mode', !editMode);
+}
+
+/* ===================== v5: main tabs & card lists (memo / knowledge) ===================== */
+function applyMainTab(tab){
+  mainTab = tab;
+  try{ localStorage.setItem('ema_main_tab', tab); }catch(e){}
+  document.querySelectorAll('.main-tab').forEach(function(b){ b.classList.toggle('active', b.dataset.mainTab === tab); });
+}
+function switchMainTab(tab){
+  if(tab === mainTab){ renderListView(); return; }
+  applyMainTab(tab);
+  renderListView();
+}
+function nodesOfKind(kind){
+  return Object.keys(nodesById).map(function(id){ return nodesById[id]; }).filter(function(n){ return n.kind === kind; });
+}
+function matchesCardSearch(n, q){
+  if(!q) return true;
+  var hay = [n.title||'', n.note||'', n.learnedFrom||'', n.place||'', (n.tags||[]).join(' ')].join('\n').toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every(function(tok){ return hay.indexOf(tok) !== -1; });
+}
+function createCardNode(kind){
+  var data;
+  if(kind === 'memo'){
+    var t = new Date(); var p2 = function(x){ return (x<10?'0':'')+x; };
+    data = { parentId:null, kind:'memo', type:'learningMemo', title:'', note:'', media:[], relatedIds:[], tags:[], createdAt:Date.now(),
+      learnedAt: t.getFullYear() + '-' + p2(t.getMonth()+1) + '-' + p2(t.getDate()), learnedFrom:'', place:'' };
+  } else {
+    data = { parentId:null, kind:'knowledge', type:'kbOther', title:'', note:'', media:[], relatedIds:[], tags:[], createdAt:Date.now() };
+  }
+  var id = newId(); data.id = id;
+  nodesById[id] = data;
+  persistLocalCache();
+  return { id: id };
+}
+function buildCardRow(n){
+  var isMemo = n.kind === 'memo';
+  var row = el('div','list-row');
+  row.style.setProperty('--type-color', 'var(' + (isMemo ? '--accent-memo' : '--accent-kb') + ')');
+  var col = el('div','list-row-main');
+  var titleRow = el('div','list-row-title-row');
+  var badge = el('span','kind-badge ' + (isMemo ? 'kb-memo' : 'kb-knowledge'));
+  badge.textContent = isMemo ? 'メモ' : ((TYPE_META[n.type]||TYPE_META.kbOther).label);
+  var t = el('span','list-row-title'); t.textContent = n.title || '(無題)';
+  titleRow.appendChild(badge); titleRow.appendChild(t);
+  col.appendChild(titleRow);
+  if(isMemo){
+    var metaBits = [n.learnedAt || '', n.learnedFrom ? (n.learnedFrom + ' から') : '', n.place || ''].filter(Boolean);
+    if(metaBits.length){
+      var ml = el('div','card-meta-line'); ml.textContent = metaBits.join(' ・ ');
+      col.appendChild(ml);
+    }
+  }
+  var noteText = (n.note || '').trim();
+  if(noteText){
+    var ex = el('div','card-excerpt'); ex.textContent = noteText;
+    col.appendChild(ex);
+  }
+  if(n.tags && n.tags.length){
+    var tagsRow = el('div','list-row-tags');
+    n.tags.forEach(function(tg){ var c = el('span','mini-tag'); c.textContent = '#' + tg; tagsRow.appendChild(c); });
+    col.appendChild(tagsRow);
+  }
+  var relTitles = (n.relatedIds || []).map(function(r){ return nodesById[r]; }).filter(Boolean).map(function(r){ return r.title || '(無題)'; });
+  if(relTitles.length){
+    var lk = el('div','card-links');
+    lk.textContent = '🔗 ' + relTitles.slice(0, 2).join('、') + (relTitles.length > 2 ? (' ほか' + (relTitles.length - 2) + '件') : '');
+    col.appendChild(lk);
+  }
+  row.appendChild(col);
+  var side = [];
+  if(n.pinned) side.push('📌');
+  if(n.media && n.media.length) side.push('📎' + n.media.length);
+  if(side.length){ var mm = el('span','list-row-meta'); mm.textContent = side.join(' '); row.appendChild(mm); }
+  row.addEventListener('click', function(id){ return function(){ openPanel(id); }; }(n.id));
+  return row;
+}
+function renderCardList(kind){
+  var lv = $('#list-view'); if(lv) lv.hidden = true;
+  var cv = $('#card-view'); if(cv) cv.hidden = false;
+  var isMemo = kind === 'memo';
+  var head = $('#card-head'); head.innerHTML = '';
+  var all = nodesOfKind(kind);
+  var headRow = el('div','card-head-row');
+  var ttl = el('span','card-head-title'); ttl.textContent = isMemo ? '学びメモ' : '基礎情報';
+  var cnt = el('span','card-head-count'); cnt.textContent = all.length + '件';
+  headRow.appendChild(ttl); headRow.appendChild(cnt);
+  if(editMode){
+    var addBtn = el('button','card-add-btn'); addBtn.type = 'button';
+    addBtn.textContent = isMemo ? '＋ メモを追加' : '＋ 基礎を追加';
+    addBtn.addEventListener('click', function(){
+      var ref = createCardNode(kind);
+      renderCardList(kind);
+      openPanel(ref.id);
+    });
+    headRow.appendChild(addBtn);
+  }
+  head.appendChild(headRow);
+  // per-kind tag filter chips
+  var counts = {};
+  all.forEach(function(n){ (n.tags||[]).forEach(function(t){ counts[t] = (counts[t]||0) + 1; }); });
+  var tagList = Object.keys(counts).sort(function(a, b){ if(counts[b] !== counts[a]) return counts[b] - counts[a]; return a.localeCompare(b, 'ja'); });
+  if(tagList.length){
+    var tagRow = el('div','card-tag-row');
+    tagList.forEach(function(tg){
+      var active = cardTagFilter[kind].indexOf(tg) !== -1;
+      var chip = el('span','chip' + (active ? ' active' : ''));
+      chip.textContent = '#' + tg + '（' + counts[tg] + '）';
+      chip.addEventListener('click', function(t2){ return function(){
+        var arr = cardTagFilter[kind];
+        var ix = arr.indexOf(t2);
+        if(ix === -1) arr.push(t2); else arr.splice(ix, 1);
+        renderCardList(kind);
+      }; }(tg));
+      tagRow.appendChild(chip);
+    });
+    head.appendChild(tagRow);
+  }
+  var itemsWrap = $('#card-items'); itemsWrap.innerHTML = '';
+  var results = all
+    .filter(function(n){ return matchesCardSearch(n, searchQuery); })
+    .filter(function(n){
+      if(!cardTagFilter[kind].length) return true;
+      var tags = n.tags || [];
+      return cardTagFilter[kind].every(function(t){ return tags.indexOf(t) !== -1; });
+    })
+    .sort(function(a, b){
+      if(!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
+      if(isMemo){
+        var da = a.learnedAt || '', db = b.learnedAt || '';
+        if(db !== da) return db < da ? -1 : 1;
+      }
+      return (b.createdAt||0) - (a.createdAt||0);
+    });
+  if(!results.length){
+    var e = el('div','list-empty-hint');
+    e.textContent = all.length ? '一致する項目がありません。' : (isMemo ? 'まだ学びメモがありません。チャットで投げてもらえればカード化します。' : 'まだ基礎情報がありません。');
+    itemsWrap.appendChild(e);
+    return;
+  }
+  results.forEach(function(n){ itemsWrap.appendChild(buildCardRow(n)); });
+}
+
+/* ===================== v5: link map (radial SVG) ===================== */
+function kindColorVar(n){
+  if(n.kind === 'memo') return '--accent-memo';
+  if(n.kind === 'knowledge') return '--accent-kb';
+  return (typeMetaOf(n) || TYPE_META.note).cssVar;
+}
+function buildLinkMapGroup(node){
+  var rel = (node.relatedIds || []).map(function(r){ return nodesById[r]; }).filter(Boolean);
+  if(!rel.length) return null;
+  var group = el('div','field-group');
+  group.appendChild(labelEl('リンクマップ'));
+  var wrap = el('div','link-map-wrap');
+  var NS = 'http://www.w3.org/2000/svg';
+  var W = 340, H = 300, cx = W/2, cy = H/2, R = 110;
+  var svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('width', '340'); svg.setAttribute('height', '300');
+  var lineCol = cssColor('--line') || '#3A3A36';
+  var inkCol = cssColor('--ink') || '#ECEAE2';
+  var softCol = cssColor('--ink-soft') || '#A3A099';
+  var shown = rel.slice(0, 12);
+  var pts = shown.map(function(rn, i){
+    var ang = (Math.PI * 2 * i) / shown.length - Math.PI / 2;
+    return { n: rn, x: cx + R * Math.cos(ang), y: cy + R * Math.sin(ang) * 0.8 };
+  });
+  pts.forEach(function(p){
+    var line = document.createElementNS(NS, 'line');
+    line.setAttribute('x1', cx); line.setAttribute('y1', cy);
+    line.setAttribute('x2', p.x); line.setAttribute('y2', p.y);
+    line.setAttribute('stroke', lineCol); line.setAttribute('stroke-width', '1');
+    svg.appendChild(line);
+  });
+  function satNode(x, y, rn, r, isCenter){
+    var g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'link-map-node');
+    var c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r);
+    c.setAttribute('fill', cssColor(kindColorVar(rn)));
+    g.appendChild(c);
+    var tx = document.createElementNS(NS, 'text');
+    tx.setAttribute('x', x); tx.setAttribute('y', y + r + 13);
+    tx.setAttribute('text-anchor', 'middle');
+    tx.setAttribute('font-size', isCenter ? '11' : '10');
+    tx.setAttribute('font-weight', isCenter ? '700' : '400');
+    tx.setAttribute('fill', isCenter ? inkCol : softCol);
+    tx.textContent = (rn.title || '(無題)').substring(0, isCenter ? 12 : 8);
+    g.appendChild(tx);
+    if(!isCenter){
+      g.addEventListener('click', function(id){ return function(){ openPanel(id); }; }(rn.id));
+    }
+    svg.appendChild(g);
+  }
+  pts.forEach(function(p){ satNode(p.x, p.y, p.n, 15, false); });
+  satNode(cx, cy, node, 24, true);
+  wrap.appendChild(svg);
+  group.appendChild(wrap);
+  var cap = el('div','link-map-caption');
+  cap.textContent = 'タップで移動できます' + (rel.length > shown.length ? ('（ほか ' + (rel.length - shown.length) + ' 件は下の関連リストに表示）') : '');
+  group.appendChild(cap);
+  return group;
+}
+
+/* ===================== v5: card detail panel (memo / knowledge) ===================== */
+function renderCardPanel(node){
+  var isMemo = node.kind === 'memo';
+  var typeSel = $('#p-type'), catLabel = $('#p-cat-label');
+  typeSel.style.display = 'none'; typeSel.disabled = true;
+  catLabel.style.display = 'inline-block';
+  catLabel.textContent = isMemo ? '学びメモ' : ('基礎 ・ ' + (TYPE_META[node.type] || TYPE_META.kbOther).label);
+  catLabel.style.color = cssColor(isMemo ? '--accent-memo' : '--accent-kb');
+
+  var body = $('#p-body');
+  body.innerHTML = '';
+
+  // title
+  var titleGroup = el('div','field-group');
+  titleGroup.appendChild(labelEl('タイトル'));
+  var titleInput = el('input'); titleInput.type = 'text'; titleInput.className = 'title-input';
+  titleInput.value = node.title || '';
+  titleInput.placeholder = 'タイトルを入力';
+  titleInput.readOnly = !editMode;
+  titleInput.addEventListener('input', function(){ debouncedUpdate(node.id, 'title', titleInput.value); });
+  titleGroup.appendChild(titleInput);
+  body.appendChild(titleGroup);
+
+  // pin toggle
+  var pinRow = el('div','field-group');
+  var pinBtn = el('button','pin-btn' + (node.pinned ? ' active' : ''));
+  pinBtn.type = 'button';
+  pinBtn.textContent = node.pinned ? '📌 ピン留め中（タップで外す）' : '📌 ピン留めする';
+  pinBtn.addEventListener('click', function(){
+    node.pinned = !node.pinned;
+    persistLocalCache();
+    renderPanelContent(node);
+    renderListView();
+    showToast(node.pinned ? 'ピン留めしました' : 'ピン留めを外しました');
+  });
+  pinRow.appendChild(pinBtn);
+  body.appendChild(pinRow);
+
+  // knowledge: type selector
+  if(!isMemo){
+    var tg = el('div','field-group');
+    tg.appendChild(labelEl('種別'));
+    var sel = el('select','type-select');
+    KB_TYPES.forEach(function(t){
+      var o = document.createElement('option');
+      o.value = t; o.textContent = TYPE_META[t].label;
+      if(node.type === t) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.disabled = !editMode;
+    sel.addEventListener('change', function(){
+      immediateUpdate(node.id, { type: sel.value });
+      renderPanelContent(nodesById[node.id]);
+      renderListView();
+    });
+    tg.appendChild(sel);
+    body.appendChild(tg);
+  }
+
+  // memo: learned meta fields
+  if(isMemo){
+    var dg = el('div','field-group');
+    dg.appendChild(labelEl('いつ'));
+    var dIn = el('input'); dIn.type = 'date'; dIn.value = node.learnedAt || '';
+    dIn.readOnly = !editMode;
+    if(!editMode) dIn.disabled = true;
+    dIn.addEventListener('change', function(){
+      immediateUpdate(node.id, { learnedAt: dIn.value });
+      renderListView();
+    });
+    dg.appendChild(dIn);
+    body.appendChild(dg);
+
+    var rowWrap = el('div','meta-fields-row');
+    var fgFrom = el('div','field-group');
+    fgFrom.appendChild(labelEl('誰から'));
+    var fIn = el('input'); fIn.type = 'text'; fIn.value = node.learnedFrom || '';
+    fIn.placeholder = '先生・先輩の名前など'; fIn.readOnly = !editMode;
+    fIn.addEventListener('input', function(){ debouncedUpdate(node.id, 'learnedFrom', fIn.value); });
+    fgFrom.appendChild(fIn);
+    var fgPlace = el('div','field-group');
+    fgPlace.appendChild(labelEl('どこで'));
+    var pIn = el('input'); pIn.type = 'text'; pIn.value = node.place || '';
+    pIn.placeholder = '現場・学校など'; pIn.readOnly = !editMode;
+    pIn.addEventListener('input', function(){ debouncedUpdate(node.id, 'place', pIn.value); });
+    fgPlace.appendChild(pIn);
+    rowWrap.appendChild(fgFrom); rowWrap.appendChild(fgPlace);
+    body.appendChild(rowWrap);
+  }
+
+  // body text
+  var ng = el('div','field-group');
+  ng.appendChild(labelEl(isMemo ? '内容' : '本文'));
+  var nta = el('textarea');
+  nta.value = node.note || '';
+  nta.placeholder = isMemo ? '教わったことをそのまま書いてOK' : '基礎情報を書く';
+  nta.readOnly = !editMode;
+  nta.addEventListener('input', function(){ debouncedUpdate(node.id, 'note', nta.value); autoGrow(nta); });
+  ng.appendChild(nta);
+  body.appendChild(ng);
+  autoGrow(nta);
+
+  // media
+  var mediaGroup = el('div','field-group');
+  mediaGroup.appendChild(labelEl('写真・動画'));
+  var grid = el('div','media-grid');
+  (node.media || []).forEach(function(m){
+    var thumb = el('div','media-thumb');
+    if(m.kind === 'video'){
+      var v = el('video'); v.src = m.dataUrl; v.muted = true;
+      thumb.appendChild(v);
+      var badge = el('span','vid-badge'); badge.textContent = '動画';
+      thumb.appendChild(badge);
+    } else {
+      var img = el('img'); img.src = m.dataUrl; img.loading = 'lazy';
+      thumb.appendChild(img);
+    }
+    thumb.addEventListener('click', function(mm){ return function(){ openMediaViewer(mm); }; }(m));
+    if(editMode){
+      var rmBtn = el('button','rm-btn'); rmBtn.textContent = '✕';
+      rmBtn.addEventListener('click', function(mid){ return function(ev){ ev.stopPropagation(); removeMedia(node.id, mid); }; }(m.id));
+      thumb.appendChild(rmBtn);
+    }
+    grid.appendChild(thumb);
+  });
+  mediaGroup.appendChild(grid);
+  if(editMode){
+    var uploadBtn = el('button','upload-btn'); uploadBtn.type = 'button';
+    uploadBtn.textContent = '＋ 写真・動画を追加';
+    uploadBtn.addEventListener('click', function(){
+      var fi = $('#file-input');
+      fi.onchange = function(){
+        if(fi.files && fi.files.length) addMediaFiles(node.id, fi.files);
+        fi.value = '';
+      };
+      fi.click();
+    });
+    mediaGroup.appendChild(uploadBtn);
+  }
+  body.appendChild(mediaGroup);
+
+  // tags
+  var tagGroup = el('div','field-group');
+  tagGroup.appendChild(labelEl('タグ'));
+  var tagChipRow = el('div','chip-row');
+  (node.tags || []).forEach(function(tg2){
+    var chip = el('span','chip');
+    var lbl = el('span'); lbl.textContent = '#' + tg2;
+    chip.appendChild(lbl);
+    if(editMode){
+      var x = el('button','chip-x'); x.textContent = '✕';
+      x.addEventListener('click', function(tt){ return function(ev){ ev.stopPropagation(); removeTag(node.id, tt); }; }(tg2));
+      chip.appendChild(x);
+    }
+    tagChipRow.appendChild(chip);
+  });
+  if(editMode){
+    var tagInputWrap = el('div','tag-input-wrap');
+    var tagInput = el('input'); tagInput.type = 'text'; tagInput.placeholder = 'タグを入力 or 選択';
+    tagInput.className = 'tag-input';
+    var suggestBox = el('div','tag-suggest');
+    function renderCardTagSuggestions(){
+      var q = tagInput.value.trim().toLowerCase();
+      var existing = {}; (node.tags || []).forEach(function(t){ existing[t] = true; });
+      var all = getAllTags().filter(function(t){ return !existing[t]; });
+      var matches = q ? all.filter(function(t){ return t.toLowerCase().indexOf(q) !== -1; }) : all;
+      suggestBox.innerHTML = '';
+      if(!matches.length){ suggestBox.classList.remove('show'); return; }
+      matches.slice(0, 8).forEach(function(t){
+        var item = el('div','tag-suggest-item');
+        item.textContent = '#' + t;
+        item.addEventListener('mousedown', function(ev){ ev.preventDefault(); });
+        item.addEventListener('click', function(){
+          addTag(node.id, t);
+          tagInput.value = '';
+          suggestBox.classList.remove('show');
+        });
+        suggestBox.appendChild(item);
+      });
+      suggestBox.classList.add('show');
+    }
+    tagInput.addEventListener('focus', renderCardTagSuggestions);
+    tagInput.addEventListener('input', renderCardTagSuggestions);
+    tagInput.addEventListener('blur', function(){ setTimeout(function(){ suggestBox.classList.remove('show'); }, 150); });
+    tagInput.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter'){
+        ev.preventDefault();
+        var v = tagInput.value.trim().replace(/^#/, '');
+        if(v){ addTag(node.id, v); tagInput.value = ''; suggestBox.classList.remove('show'); }
+      } else if(ev.key === 'Escape'){
+        suggestBox.classList.remove('show');
+      }
+    });
+    tagInputWrap.appendChild(tagInput);
+    tagInputWrap.appendChild(suggestBox);
+    tagChipRow.appendChild(tagInputWrap);
+  }
+  tagGroup.appendChild(tagChipRow);
+  body.appendChild(tagGroup);
+
+  // related (all kinds, color-coded chips)
+  var relGroup = el('div','field-group');
+  relGroup.appendChild(labelEl('関連ページ'));
+  var relRow = el('div','chip-row');
+  var relNodes = (node.relatedIds || []).map(function(r){ return nodesById[r]; }).filter(Boolean);
+  relNodes.forEach(function(rn){
+    var chip = el('span','chip');
+    var dot = el('span'); dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:' + cssColor(kindColorVar(rn)) + ';display:inline-block;';
+    chip.appendChild(dot);
+    var lbl2 = el('span'); lbl2.textContent = rn.title || '(無題)';
+    chip.appendChild(lbl2);
+    if(editMode){
+      var x2 = el('button','chip-x'); x2.textContent = '✕';
+      x2.addEventListener('click', function(rr){ return function(ev){ ev.stopPropagation(); removeRelation(node.id, rr); }; }(rn.id));
+      chip.appendChild(x2);
+    }
+    chip.addEventListener('click', function(rr){ return function(){ openPanel(rr); }; }(rn.id));
+    relRow.appendChild(chip);
+  });
+  if(editMode){
+    var addChip = el('button','chip-add'); addChip.type = 'button'; addChip.textContent = '＋ 追加';
+    addChip.addEventListener('click', function(){ openPicker(node.id, null, null); });
+    relRow.appendChild(addChip);
+  }
+  relGroup.appendChild(relRow);
+  if(!editMode && !relNodes.length){
+    var noneNote = el('div','root-note'); noneNote.textContent = '関連はまだありません。';
+    relGroup.appendChild(noneNote);
+  }
+  body.appendChild(relGroup);
+
+  // link map
+  var lm = buildLinkMapGroup(node);
+  if(lm) body.appendChild(lm);
+
+  // related candidates across kinds (shared tags)
+  var myTags = node.tags || [];
+  if(myTags.length){
+    var relSet = {};
+    (node.relatedIds || []).forEach(function(r){ relSet[r] = true; });
+    var cands = Object.keys(nodesById).map(function(id){ return nodesById[id]; })
+      .filter(function(n){ return (n.kind === 'content' || n.kind === 'memo' || n.kind === 'knowledge') && n.id !== node.id && !relSet[n.id]; })
+      .map(function(n){
+        var shared = (n.tags || []).filter(function(t){ return myTags.indexOf(t) !== -1; });
+        return { node: n, shared: shared };
+      })
+      .filter(function(c){ return c.shared.length > 0; })
+      .sort(function(a, b){
+        if(b.shared.length !== a.shared.length) return b.shared.length - a.shared.length;
+        return (a.node.title || '').localeCompare(b.node.title || '', 'ja');
+      })
+      .slice(0, 5);
+    if(cands.length){
+      var candGroup = el('div','field-group');
+      candGroup.appendChild(labelEl('関連候補（タグが重なるページ）'));
+      cands.forEach(function(c){
+        var row = el('div','chip-row'); row.style.marginBottom = '6px';
+        var chip = el('span','chip');
+        var dot2 = el('span'); dot2.style.cssText = 'width:7px;height:7px;border-radius:50%;background:' + cssColor(kindColorVar(c.node)) + ';display:inline-block;';
+        chip.appendChild(dot2);
+        var clbl = el('span'); clbl.textContent = c.node.title || '(無題)';
+        chip.appendChild(clbl);
+        chip.addEventListener('click', function(cid){ return function(){ openPanel(cid); }; }(c.node.id));
+        row.appendChild(chip);
+        var tagNote = el('span');
+        tagNote.style.cssText = 'font-size:11px;color:var(--ink-soft);align-self:center;';
+        tagNote.textContent = '共通タグ: ' + c.shared.map(function(t){ return '#' + t; }).join(' ');
+        row.appendChild(tagNote);
+        if(editMode){
+          var addBtn = el('button','chip-add'); addBtn.type = 'button'; addBtn.textContent = '関連に追加';
+          addBtn.addEventListener('click', function(cid){ return function(){
+            addRelation(node.id, cid);
+            renderPanelContent(nodesById[node.id]);
+            renderListView();
+            showToast('関連に追加しました');
+          }; }(c.node.id));
+          row.appendChild(addBtn);
+        }
+        candGroup.appendChild(row);
+      });
+      body.appendChild(candGroup);
+    }
+  }
+
+  // done
+  var doneBtn = el('button','done-btn'); doneBtn.type = 'button';
+  doneBtn.textContent = editMode ? '✓ 完了（保存して閉じる）' : '閉じる';
+  doneBtn.addEventListener('click', function(){ closePanel(); });
+  body.appendChild(doneBtn);
+
+  // delete
+  if(editMode){
+    var dz = el('div','danger-zone');
+    var delBtn = el('button','delete-btn'); delBtn.type = 'button';
+    delBtn.textContent = 'このノードを削除';
+    delBtn.addEventListener('click', function(){
+      if(confirm('本当に削除しますか？この操作は取り消せません。')){ deleteNode(node.id); }
+    });
+    dz.appendChild(delBtn);
+    body.appendChild(dz);
+  }
 }
 
 function openRelOverview(){
