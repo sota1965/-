@@ -1060,6 +1060,13 @@ input[type=text],input[type=number],input[type=date],.field-group textarea,.fiel
       <button id="diag-import-file" type="button">📁 ファイルから読み込み</button>
       <input type="file" id="import-file-input" accept=".json,application/json" class="sr-only">
     </div>
+    <div class="diag-backup-section">
+      <div class="diag-backup-label">☁️ Googleドライブ自動同期（端末間で自動で揃える）</div>
+      <div id="drive-sync-status" style="font-size:12px;opacity:.85;margin:2px 0 6px;">未連携</div>
+      <button id="drive-link-btn" type="button">🔗 ドライブと連携する</button>
+      <button id="drive-sync-btn" type="button">🔄 今すぐ同期</button>
+      <button id="drive-unlink-btn" type="button">連携を切る</button>
+    </div>
   </div>
 </div>
 
@@ -1388,11 +1395,13 @@ function persistLocalCache(){
         showToast('保存に失敗しました。書き出しでバックアップを取ることをお勧めします');
       }
     });
+    driveScheduleUpload();
     return;
   }
   try{ localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nodesById)); }catch(e){
     showToast('保存容量が上限に近づいています。写真を減らすか、バックアップ後に古いページを整理してください');
   }
+  driveScheduleUpload();
 }
 function loadLocalCache(){
   if(storageBackend === 'idb') return; // IndexedDB の場合は bootstrapStorage で読み込み済み
@@ -4284,6 +4293,309 @@ var GATE_KEY = 'ema_gate_ok_v1';
   input.addEventListener('keydown', function(ev){ if(ev.key === 'Enter') tryUnlock(); });
   setTimeout(function(){ input.focus(); }, 100);
 })();
+
+
+/* ===================== Google Drive 自動同期 (v6) =====================
+   端末間同期: Google Drive の appDataFolder（アプリ専用の隠し領域）に
+   全ノードを1ファイルで置き、編集したら自動で上げ、起動時と再表示時に
+   取り込んで id 単位でマージする。
+   競合ルール: 最後に同期した状態（base）と比べてローカルで変わっている
+   ノードはローカル優先、それ以外はリモート優先。削除は伝播しない
+   （従来の差分書き出しと同じ制限）。
+   base は IndexedDB の 'driveBase' キーに保存する（使えない環境では
+   メモリ上のみ＋未同期集合 dirtyNodeIds にフォールバックする）。 */
+var DRIVE_CLIENT_ID = '671563290673-bf385gd30gmej5ak42k8u2a2hhvbopnm.apps.googleusercontent.com';
+var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+var DRIVE_FILE_NAME = 'atlas-sync.json';
+var DRIVE_LINK_KEY = 'ema_drive_linked';
+var DRIVE_DEVICE_KEY = 'ema_device_id';
+var driveLinked = false;
+try{ driveLinked = localStorage.getItem(DRIVE_LINK_KEY) === '1'; }catch(e){}
+var driveDeviceId = (function(){
+  try{
+    var d = localStorage.getItem(DRIVE_DEVICE_KEY);
+    if(!d){ d = 'dev-' + Math.random().toString(36).slice(2, 10); localStorage.setItem(DRIVE_DEVICE_KEY, d); }
+    return d;
+  }catch(e){ return 'dev-unknown'; }
+})();
+var driveToken = null;         // {accessToken, expiresAt}
+var driveTokenClient = null;
+var driveTokenWaiters = [];
+var driveFileId = null;
+var driveBase = {};            // id -> JSON文字列（最後に同期した状態）
+var driveBaseLoaded = false;
+var driveLastRemoteUpdatedAt = 0;
+var driveLastUploadAt = 0;
+var driveLastPullAt = 0;
+var driveUploadTimer = null;
+var driveSyncBusy = false;
+
+function driveTimeStr(ms){
+  var d = new Date(ms);
+  function p2(n){ return (n < 10 ? '0' : '') + n; }
+  return p2(d.getHours()) + ':' + p2(d.getMinutes());
+}
+function driveSetStatus(text){
+  var el = document.getElementById('drive-sync-status');
+  if(el) el.textContent = text;
+}
+function driveRenderSyncUI(){
+  var linkBtn = document.getElementById('drive-link-btn');
+  var syncBtn = document.getElementById('drive-sync-btn');
+  var unlinkBtn = document.getElementById('drive-unlink-btn');
+  if(linkBtn) linkBtn.style.display = driveLinked ? 'none' : '';
+  if(syncBtn) syncBtn.style.display = driveLinked ? '' : 'none';
+  if(unlinkBtn) unlinkBtn.style.display = driveLinked ? '' : 'none';
+  if(!driveLinked) driveSetStatus('未連携（この端末のデータは自動同期されません）');
+}
+function driveNodeJson(id){
+  try{ return nodesById[id] ? JSON.stringify(nodesById[id]) : null; }catch(e){ return null; }
+}
+function driveIsLocalChanged(id){
+  if(driveBaseLoaded) return driveBase[id] !== driveNodeJson(id);
+  return dirtyNodeIds.has(id);
+}
+function driveHasChanges(){
+  var ids = Object.keys(nodesById);
+  for(var i = 0; i < ids.length; i++){ if(driveIsLocalChanged(ids[i])) return true; }
+  return false;
+}
+function driveSnapshotCurrent(){
+  var snap = {};
+  Object.keys(nodesById).forEach(function(id){ snap[id] = driveNodeJson(id); });
+  return snap;
+}
+function driveBaseSave(){
+  if(storageBackend === 'idb' && idbDb){
+    idbPut(idbDb, 'driveBase', driveBase).catch(function(){});
+  }
+}
+function driveBaseLoad(done){
+  if(storageBackend === 'idb' && idbDb){
+    idbGet(idbDb, 'driveBase').then(function(stored){
+      if(stored && typeof stored === 'object'){ driveBase = stored; driveBaseLoaded = true; }
+      done();
+    }).catch(function(){ done(); });
+  } else { done(); } // base が読めない環境では未同期集合（dirtyNodeIds）で判定する
+}
+/* ---- 認証（Google Identity Services） ---- */
+function driveLoadGis(cb){
+  if(window.google && google.accounts && google.accounts.oauth2){ cb(true); return; }
+  var s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.async = true; s.defer = true;
+  s.onload = function(){ cb(true); };
+  s.onerror = function(){ cb(false); };
+  document.head.appendChild(s);
+}
+function driveEnsureClient(){
+  if(driveTokenClient) return driveTokenClient;
+  driveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: DRIVE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: function(resp){
+      var ws = driveTokenWaiters; driveTokenWaiters = [];
+      if(resp && resp.access_token){
+        driveToken = { accessToken: resp.access_token, expiresAt: Date.now() + (resp.expires_in ? resp.expires_in * 1000 : 3600000) };
+        ws.forEach(function(f){ f(driveToken.accessToken); });
+      } else {
+        ws.forEach(function(f){ f(null); });
+      }
+    },
+    error_callback: function(){
+      var ws = driveTokenWaiters; driveTokenWaiters = [];
+      ws.forEach(function(f){ f(null); });
+    }
+  });
+  return driveTokenClient;
+}
+function driveGetToken(interactive, done){
+  if(driveToken && driveToken.expiresAt > Date.now() + 30000){ done(driveToken.accessToken); return; }
+  driveTokenWaiters.push(done);
+  if(driveTokenWaiters.length > 1) return;
+  driveLoadGis(function(ok){
+    if(!ok){
+      var ws = driveTokenWaiters; driveTokenWaiters = [];
+      ws.forEach(function(f){ f(null); });
+      return;
+    }
+    try{ driveEnsureClient().requestAccessToken({ prompt: interactive ? 'consent' : '' }); }
+    catch(e){
+      var ws2 = driveTokenWaiters; driveTokenWaiters = [];
+      ws2.forEach(function(f){ f(null); });
+    }
+  });
+}
+/* ---- Drive API ---- */
+function driveApi(token, url, options){
+  options = options || {};
+  options.headers = options.headers || {};
+  options.headers['Authorization'] = 'Bearer ' + token;
+  return fetch(url, options).then(function(res){
+    if(res.status === 401){ driveToken = null; throw new Error('認証の期限切れ'); }
+    if(!res.ok) throw new Error('Drive応答 ' + res.status);
+    return res;
+  });
+}
+function driveFindFile(token){
+  var url = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=' +
+    encodeURIComponent('files(id,name,modifiedTime)') + '&q=' + encodeURIComponent("name = '" + DRIVE_FILE_NAME + "'");
+  return driveApi(token, url).then(function(r){ return r.json(); }).then(function(j){
+    var f = (j.files || [])[0];
+    driveFileId = f ? f.id : null;
+    return driveFileId;
+  });
+}
+/* ---- 取り込み（pull） ---- */
+function driveApplyRemote(remote){
+  if(!remote || !remote.nodes || typeof remote.updatedAt !== 'number') return 0;
+  if(remote.updatedAt <= driveLastRemoteUpdatedAt) return 0;
+  driveLastRemoteUpdatedAt = remote.updatedAt;
+  var changed = 0;
+  Object.keys(remote.nodes).forEach(function(id){
+    if(driveIsLocalChanged(id)) return; // ローカル変更はローカル優先
+    var rj = null;
+    try{ rj = JSON.stringify(remote.nodes[id]); }catch(e){ return; }
+    if(rj !== driveNodeJson(id)){ nodesById[id] = remote.nodes[id]; changed++; }
+  });
+  // base は「リモートの状態」に合わせる（ローカル変更分はリモート側の値が base）
+  Object.keys(remote.nodes).forEach(function(id){
+    try{ driveBase[id] = JSON.stringify(remote.nodes[id]); }catch(e){}
+  });
+  driveBaseLoaded = true;
+  driveBaseSave();
+  if(changed > 0){
+    nodeSnapshot = driveSnapshotCurrent();
+    persistLocalCache();
+    renderListView();
+    if(selectedId && nodesById[selectedId]) renderPanelContent(nodesById[selectedId]);
+    showToast('ドライブから同期しました（' + changed + '件）');
+  }
+  driveScheduleUpload(); // ローカル変更が残っていれば、取り込み後に続けて上げる
+  return changed;
+}
+function drivePull(){
+  if(!driveLinked || driveSyncBusy) return;
+  driveSyncBusy = true; driveLastPullAt = Date.now();
+  driveSetStatus('同期中…');
+  driveGetToken(false, function(token){
+    if(!token){ driveSyncBusy = false; driveSetStatus('再連携が必要です（下の「ドライブと連携する」を押し直してください）'); driveRenderSyncUI(); return; }
+    driveFindFile(token).then(function(fid){
+      if(!fid){
+        driveSyncBusy = false;
+        driveSetStatus('連携済み（ドライブ側にファイルなし。編集すると自動で作られます）');
+        if(driveHasChanges()) driveUpload(true);
+        return null;
+      }
+      return driveApi(token, 'https://www.googleapis.com/drive/v3/files/' + fid + '?alt=media')
+        .then(function(r){ return r.json(); })
+        .then(function(remote){
+          driveSyncBusy = false;
+          var n = driveApplyRemote(remote);
+          if(n === 0) driveSetStatus('連携済み（最新です）');
+          else driveSetStatus('連携済み（最終同期 ' + driveTimeStr(Date.now()) + '）');
+        });
+    }).catch(function(e){
+      driveSyncBusy = false;
+      driveSetStatus('同期エラー: ' + (e && e.message ? e.message : e));
+    });
+  });
+}
+/* ---- 送信（upload） ---- */
+function driveScheduleUpload(){
+  if(!driveLinked) return;
+  if(driveUploadTimer) clearTimeout(driveUploadTimer);
+  driveUploadTimer = setTimeout(function(){ driveUploadTimer = null; driveUpload(false); }, 8000);
+}
+function driveUpload(force){
+  if(!driveLinked || driveSyncBusy) return;
+  if(!force && !driveHasChanges()) return;
+  var nowMs = Date.now();
+  if(!force && nowMs - driveLastUploadAt < 20000){
+    if(!driveUploadTimer){
+      driveUploadTimer = setTimeout(function(){ driveUploadTimer = null; driveUpload(false); }, 20000 - (nowMs - driveLastUploadAt));
+    }
+    return;
+  }
+  driveSyncBusy = true;
+  driveSetStatus('同期中…');
+  driveGetToken(false, function(token){
+    if(!token){ driveSyncBusy = false; driveSetStatus('再連携が必要です（下の「ドライブと連携する」を押し直してください）'); return; }
+    var payload = { app: 'ema-atlas', kind: 'drive-sync', version: 1, updatedAt: Date.now(), deviceId: driveDeviceId, nodes: nodesById };
+    var body = JSON.stringify(payload);
+    var uploaded = driveSnapshotCurrent();
+    driveFindFile(token).then(function(fid){
+      if(fid){
+        return driveApi(token, 'https://www.googleapis.com/upload/drive/v3/files/' + fid + '?uploadType=media',
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body });
+      }
+      var form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name: DRIVE_FILE_NAME, parents: ['appDataFolder'] })], { type: 'application/json' }));
+      form.append('file', new Blob([body], { type: 'application/json' }));
+      return driveApi(token, 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+        { method: 'POST', body: form });
+    }).then(function(){
+      driveSyncBusy = false;
+      driveLastUploadAt = Date.now();
+      driveLastRemoteUpdatedAt = payload.updatedAt;
+      driveBase = uploaded; driveBaseLoaded = true; driveBaseSave();
+      Object.keys(uploaded).forEach(function(id){
+        if(driveNodeJson(id) === uploaded[id]) dirtyNodeIds.delete(id);
+      });
+      saveDirtySet(); updateDirtyExportLabel();
+      driveSetStatus('連携済み（最終同期 ' + driveTimeStr(driveLastUploadAt) + '）');
+    }).catch(function(e){
+      driveSyncBusy = false;
+      driveSetStatus('アップロード失敗: ' + (e && e.message ? e.message : e));
+    });
+  });
+}
+/* ---- UI と起動 ---- */
+function driveBindSyncUI(){
+  var linkBtn = document.getElementById('drive-link-btn');
+  var syncBtn = document.getElementById('drive-sync-btn');
+  var unlinkBtn = document.getElementById('drive-unlink-btn');
+  if(linkBtn) linkBtn.addEventListener('click', function(){
+    driveSetStatus('Googleに接続しています…');
+    driveGetToken(true, function(token){
+      if(!token){ driveSetStatus('連携できませんでした。もう一度お試しください'); return; }
+      driveLinked = true;
+      try{ localStorage.setItem(DRIVE_LINK_KEY, '1'); }catch(e){}
+      driveRenderSyncUI();
+      driveFindFile(token).then(function(fid){
+        if(fid) drivePull();
+        else driveUpload(true);
+      }).catch(function(){ driveUpload(true); });
+    });
+  });
+  if(syncBtn) syncBtn.addEventListener('click', function(){ drivePull(); driveUpload(false); });
+  if(unlinkBtn) unlinkBtn.addEventListener('click', function(){
+    driveLinked = false; driveToken = null;
+    try{ localStorage.removeItem(DRIVE_LINK_KEY); }catch(e){}
+    driveRenderSyncUI();
+    showToast('ドライブ連携を切りました（ドライブ側のファイルは残っています）');
+  });
+}
+(function driveBoot(){
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    if(!storageBooting || tries > 40){
+      clearInterval(iv);
+      driveRenderSyncUI(); driveBindSyncUI();
+      if(driveLinked) driveBaseLoad(function(){ drivePull(); });
+    }
+  }, 500);
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && driveLinked && Date.now() - driveLastPullAt > 60000) drivePull();
+  });
+})();
+/* テスト・診断用フック */
+window.__emaDriveSync = {
+  pull: drivePull,
+  upload: function(){ driveUpload(true); },
+  state: function(){ return { linked: driveLinked, fileId: driveFileId, lastRemote: driveLastRemoteUpdatedAt, baseLoaded: driveBaseLoaded, busy: driveSyncBusy }; }
+};
 
 bootstrapStorage();
 })();
