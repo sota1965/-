@@ -882,7 +882,8 @@ button{font-family:inherit;}
 .diag-backup-label{font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;}
 #diag-export, #diag-import, #diag-compress, #diag-diff-export,
 #diag-export-file, #diag-diff-file-export, #diag-import-file,
-#drive-link-btn, #drive-sync-btn, #drive-unlink-btn{
+#drive-link-btn, #drive-sync-btn, #drive-unlink-btn,
+#drive-force-pull-btn, #drive-force-push-btn{
   width:100%;padding:9px;border-radius:8px;margin-top:6px;
   border:1px solid var(--danger);background:transparent;color:var(--danger);
   font-size:13px;font-weight:700;cursor:pointer;
@@ -1049,6 +1050,8 @@ input[type=text],input[type=number],input[type=date],.field-group textarea,.fiel
       <div id="drive-sync-status" style="font-size:12px;opacity:.85;margin:2px 0 6px;">未連携</div>
       <button id="drive-link-btn" type="button">🔗 ドライブと連携する</button>
       <button id="drive-sync-btn" type="button">🔄 今すぐ同期</button>
+      <button id="drive-force-pull-btn" type="button">⬇ ドライブに合わせる（この端末を上書き）</button>
+      <button id="drive-force-push-btn" type="button">⬆ この端末を正として上げる</button>
       <button id="drive-unlink-btn" type="button">連携を切る</button>
     </div>
     <pre id="diag-text"></pre>
@@ -4296,20 +4299,27 @@ var GATE_KEY = 'ema_gate_ok_v1';
 })();
 
 
-/* ===================== Google Drive 自動同期 (v6) =====================
+/* ===================== Google Drive 自動同期 (v6.2) =====================
    端末間同期: Google Drive の appDataFolder（アプリ専用の隠し領域）に
    全ノードを1ファイルで置き、編集したら自動で上げ、起動時と再表示時に
    取り込んで id 単位でマージする。
-   競合ルール: 最後に同期した状態（base）と比べてローカルで変わっている
-   ノードはローカル優先、それ以外はリモート優先。削除は伝播しない
-   （従来の差分書き出しと同じ制限）。
-   base は IndexedDB の 'driveBase' キーに保存する（使えない環境では
-   メモリ上のみ＋未同期集合 dirtyNodeIds にフォールバックする）。 */
+   競合判定: 最後に同期した状態を「ノードごとのハッシュ」で localStorage
+   に持ち（軽いので常に読み込める）、現在とハッシュが違うノードだけを
+   ローカル変更として守る。それ以外はリモート優先。
+   初回同期（base が無い端末）ではリモート優先で揃え、端末にしかない
+   ノードは次のアップロードで足す。削除は伝播しない。
+   v6.2 の変更点: v6 は base を IndexedDB に置き、読めない場面では
+   未同期集合（dirtyNodeIds）にフォールバックしていたが、過去の利用で
+   溜まった未同期フラグがほぼ全ノードに付いていると初回取り込みが
+   全件ブロックされ「最新です」と表示されるのに中身が揃わない不具合が
+   あった。ハッシュ base 方式でこれを解消し、手動の「ドライブに合わせる」
+   「この端末を正として上げる」も追加した。 */
 var DRIVE_CLIENT_ID = '671563290673-bf385gd30gmej5ak42k8u2a2hhvbopnm.apps.googleusercontent.com';
 var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 var DRIVE_FILE_NAME = 'atlas-sync.json';
 var DRIVE_LINK_KEY = 'ema_drive_linked';
 var DRIVE_DEVICE_KEY = 'ema_device_id';
+var DRIVE_BASE_KEY = 'ema_drive_base_v1';
 var driveLinked = false;
 try{ driveLinked = localStorage.getItem(DRIVE_LINK_KEY) === '1'; }catch(e){}
 var driveDeviceId = (function(){
@@ -4323,14 +4333,33 @@ var driveToken = null;         // {accessToken, expiresAt}
 var driveTokenClient = null;
 var driveTokenWaiters = [];
 var driveFileId = null;
-var driveBase = {};            // id -> JSON文字列（最後に同期した状態）
-var driveBaseLoaded = false;
+var driveBase = {};            // id -> ハッシュ文字列（最後に同期した状態）
+var driveBaseReady = false;
+try{
+  var driveBaseRaw = localStorage.getItem(DRIVE_BASE_KEY);
+  if(driveBaseRaw){ driveBase = JSON.parse(driveBaseRaw) || {}; driveBaseReady = true; }
+}catch(e){}
 var driveLastRemoteUpdatedAt = 0;
 var driveLastUploadAt = 0;
 var driveLastPullAt = 0;
 var driveUploadTimer = null;
 var driveSyncBusy = false;
+var driveLastError = '';
+var driveForceNextPull = false;
 
+function driveHash(s){
+  if(s === null || s === undefined) return null;
+  var h1 = 0x811c9dc5, h2 = 0x01000193, i, c;
+  for(i = 0; i < s.length; i++){
+    c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193);
+    h2 = Math.imul(h2 + c, 0x85ebca6b); h2 ^= h2 >>> 13;
+  }
+  return (h1 >>> 0).toString(36) + '.' + (h2 >>> 0).toString(36);
+}
+function driveBaseSave(){
+  try{ localStorage.setItem(DRIVE_BASE_KEY, JSON.stringify(driveBase)); }catch(e){}
+}
 function driveTimeStr(ms){
   var d = new Date(ms);
   function p2(n){ return (n < 10 ? '0' : '') + n; }
@@ -4338,22 +4367,26 @@ function driveTimeStr(ms){
 }
 function driveSetStatus(text){
   var el = document.getElementById('drive-sync-status');
-  if(el) el.textContent = text;
+  if(el) el.textContent = text + (driveLastError ? '（⚠️ ' + driveLastError + '）' : '') + '［全' + Object.keys(nodesById).length + '件］';
 }
 function driveRenderSyncUI(){
   var linkBtn = document.getElementById('drive-link-btn');
   var syncBtn = document.getElementById('drive-sync-btn');
   var unlinkBtn = document.getElementById('drive-unlink-btn');
+  var fpullBtn = document.getElementById('drive-force-pull-btn');
+  var fpushBtn = document.getElementById('drive-force-push-btn');
   if(linkBtn) linkBtn.style.display = driveLinked ? 'none' : '';
   if(syncBtn) syncBtn.style.display = driveLinked ? '' : 'none';
   if(unlinkBtn) unlinkBtn.style.display = driveLinked ? '' : 'none';
+  if(fpullBtn) fpullBtn.style.display = driveLinked ? '' : 'none';
+  if(fpushBtn) fpushBtn.style.display = driveLinked ? '' : 'none';
   if(!driveLinked) driveSetStatus('未連携（この端末のデータは自動同期されません）');
 }
 function driveNodeJson(id){
   try{ return nodesById[id] ? JSON.stringify(nodesById[id]) : null; }catch(e){ return null; }
 }
 function driveIsLocalChanged(id){
-  if(driveBaseLoaded) return driveBase[id] !== driveNodeJson(id);
+  if(driveBaseReady) return driveBase[id] !== driveHash(driveNodeJson(id));
   return dirtyNodeIds.has(id);
 }
 function driveHasChanges(){
@@ -4361,23 +4394,10 @@ function driveHasChanges(){
   for(var i = 0; i < ids.length; i++){ if(driveIsLocalChanged(ids[i])) return true; }
   return false;
 }
-function driveSnapshotCurrent(){
+function driveHashesCurrent(){
   var snap = {};
-  Object.keys(nodesById).forEach(function(id){ snap[id] = driveNodeJson(id); });
+  Object.keys(nodesById).forEach(function(id){ snap[id] = driveHash(driveNodeJson(id)); });
   return snap;
-}
-function driveBaseSave(){
-  if(storageBackend === 'idb' && idbDb){
-    idbPut(idbDb, 'driveBase', driveBase).catch(function(){});
-  }
-}
-function driveBaseLoad(done){
-  if(storageBackend === 'idb' && idbDb){
-    idbGet(idbDb, 'driveBase').then(function(stored){
-      if(stored && typeof stored === 'object'){ driveBase = stored; driveBaseLoaded = true; }
-      done();
-    }).catch(function(){ done(); });
-  } else { done(); } // base が読めない環境では未同期集合（dirtyNodeIds）で判定する
 }
 /* ---- 認証（Google Identity Services） ---- */
 function driveLoadGis(cb){
@@ -4448,25 +4468,28 @@ function driveFindFile(token){
   });
 }
 /* ---- 取り込み（pull） ---- */
-function driveApplyRemote(remote){
+function driveApplyRemote(remote, force){
   if(!remote || !remote.nodes || typeof remote.updatedAt !== 'number') return 0;
-  if(remote.updatedAt <= driveLastRemoteUpdatedAt) return 0;
+  if(!force && remote.updatedAt <= driveLastRemoteUpdatedAt) return 0;
   driveLastRemoteUpdatedAt = remote.updatedAt;
+  var firstSync = !driveBaseReady;
   var changed = 0;
+  var remoteHashes = {};
   Object.keys(remote.nodes).forEach(function(id){
-    if(driveIsLocalChanged(id)) return; // ローカル変更はローカル優先
     var rj = null;
     try{ rj = JSON.stringify(remote.nodes[id]); }catch(e){ return; }
+    remoteHashes[id] = driveHash(rj);
+    if(!force && !firstSync && driveIsLocalChanged(id)) return; // ローカル変更はローカル優先
     if(rj !== driveNodeJson(id)){ nodesById[id] = remote.nodes[id]; changed++; }
   });
-  // base は「リモートの状態」に合わせる（ローカル変更分はリモート側の値が base）
-  Object.keys(remote.nodes).forEach(function(id){
-    try{ driveBase[id] = JSON.stringify(remote.nodes[id]); }catch(e){}
-  });
-  driveBaseLoaded = true;
+  // base は「リモートの状態」に合わせる（初回はリモート分のみ＝端末固有分は未送信として残る）
+  Object.keys(remoteHashes).forEach(function(id){ driveBase[id] = remoteHashes[id]; });
+  driveBaseReady = true;
   driveBaseSave();
   if(changed > 0){
-    nodeSnapshot = driveSnapshotCurrent();
+    var snap = {};
+    Object.keys(nodesById).forEach(function(id){ snap[id] = driveNodeJson(id); });
+    nodeSnapshot = snap;
     persistLocalCache();
     renderListView();
     if(selectedId && nodesById[selectedId]) renderPanelContent(nodesById[selectedId]);
@@ -4480,7 +4503,7 @@ function drivePull(){
   driveSyncBusy = true; driveLastPullAt = Date.now();
   driveSetStatus('同期中…');
   driveGetToken(false, function(token){
-    if(!token){ driveSyncBusy = false; driveSetStatus('再連携が必要です（下の「ドライブと連携する」を押し直してください）'); driveRenderSyncUI(); return; }
+    if(!token){ driveSyncBusy = false; driveLastError = ''; driveSetStatus('再連携が必要です（下の「ドライブと連携する」を押し直してください）'); driveRenderSyncUI(); return; }
     driveFindFile(token).then(function(fid){
       if(!fid){
         driveSyncBusy = false;
@@ -4492,13 +4515,16 @@ function drivePull(){
         .then(function(r){ return r.json(); })
         .then(function(remote){
           driveSyncBusy = false;
-          var n = driveApplyRemote(remote);
+          var force = driveForceNextPull; driveForceNextPull = false;
+          var n = driveApplyRemote(remote, force);
+          driveLastError = '';
           if(n === 0) driveSetStatus('連携済み（最新です）');
           else driveSetStatus('連携済み（最終同期 ' + driveTimeStr(Date.now()) + '）');
         });
     }).catch(function(e){
       driveSyncBusy = false;
-      driveSetStatus('同期エラー: ' + (e && e.message ? e.message : e));
+      driveLastError = '受信: ' + (e && e.message ? e.message : e);
+      driveSetStatus('連携済み');
     });
   });
 }
@@ -4524,7 +4550,8 @@ function driveUpload(force){
     if(!token){ driveSyncBusy = false; driveSetStatus('再連携が必要です（下の「ドライブと連携する」を押し直してください）'); return; }
     var payload = { app: 'ema-atlas', kind: 'drive-sync', version: 1, updatedAt: Date.now(), deviceId: driveDeviceId, nodes: nodesById };
     var body = JSON.stringify(payload);
-    var uploaded = driveSnapshotCurrent();
+    var uploadedHashes = driveHashesCurrent();
+    var uploadedIds = Object.keys(nodesById);
     driveFindFile(token).then(function(fid){
       if(fid){
         return driveApi(token, 'https://www.googleapis.com/upload/drive/v3/files/' + fid + '?uploadType=media',
@@ -4539,15 +4566,17 @@ function driveUpload(force){
       driveSyncBusy = false;
       driveLastUploadAt = Date.now();
       driveLastRemoteUpdatedAt = payload.updatedAt;
-      driveBase = uploaded; driveBaseLoaded = true; driveBaseSave();
-      Object.keys(uploaded).forEach(function(id){
-        if(driveNodeJson(id) === uploaded[id]) dirtyNodeIds.delete(id);
+      driveBase = uploadedHashes; driveBaseReady = true; driveBaseSave();
+      uploadedIds.forEach(function(id){
+        if(driveHash(driveNodeJson(id)) === uploadedHashes[id]) dirtyNodeIds.delete(id);
       });
       saveDirtySet(); updateDirtyExportLabel();
+      driveLastError = '';
       driveSetStatus('連携済み（最終同期 ' + driveTimeStr(driveLastUploadAt) + '）');
     }).catch(function(e){
       driveSyncBusy = false;
-      driveSetStatus('アップロード失敗: ' + (e && e.message ? e.message : e));
+      driveLastError = '送信: ' + (e && e.message ? e.message : e);
+      driveSetStatus('連携済み');
     });
   });
 }
@@ -4556,6 +4585,8 @@ function driveBindSyncUI(){
   var linkBtn = document.getElementById('drive-link-btn');
   var syncBtn = document.getElementById('drive-sync-btn');
   var unlinkBtn = document.getElementById('drive-unlink-btn');
+  var fpullBtn = document.getElementById('drive-force-pull-btn');
+  var fpushBtn = document.getElementById('drive-force-push-btn');
   if(linkBtn) linkBtn.addEventListener('click', function(){
     driveSetStatus('Googleに接続しています…');
     driveGetToken(true, function(token){
@@ -4570,6 +4601,16 @@ function driveBindSyncUI(){
     });
   });
   if(syncBtn) syncBtn.addEventListener('click', function(){ drivePull(); driveUpload(false); });
+  if(fpullBtn) fpullBtn.addEventListener('click', function(){
+    driveForceNextPull = true;
+    driveLastRemoteUpdatedAt = 0; // 同じ版でも取り直す
+    drivePull();
+    showToast('ドライブの内容に合わせます（この端末の未同期の変更は上書きされます）');
+  });
+  if(fpushBtn) fpushBtn.addEventListener('click', function(){
+    driveUpload(true);
+    showToast('この端末の内容をドライブに上げます');
+  });
   if(unlinkBtn) unlinkBtn.addEventListener('click', function(){
     driveLinked = false; driveToken = null;
     try{ localStorage.removeItem(DRIVE_LINK_KEY); }catch(e){}
@@ -4584,7 +4625,7 @@ function driveBindSyncUI(){
     if(!storageBooting || tries > 40){
       clearInterval(iv);
       driveRenderSyncUI(); driveBindSyncUI();
-      if(driveLinked) driveBaseLoad(function(){ drivePull(); });
+      if(driveLinked) drivePull();
     }
   }, 500);
   document.addEventListener('visibilitychange', function(){
@@ -4595,9 +4636,8 @@ function driveBindSyncUI(){
 window.__emaDriveSync = {
   pull: drivePull,
   upload: function(){ driveUpload(true); },
-  state: function(){ return { linked: driveLinked, fileId: driveFileId, lastRemote: driveLastRemoteUpdatedAt, baseLoaded: driveBaseLoaded, busy: driveSyncBusy }; }
+  state: function(){ return { linked: driveLinked, fileId: driveFileId, lastRemote: driveLastRemoteUpdatedAt, baseReady: driveBaseReady, busy: driveSyncBusy, lastError: driveLastError }; }
 };
-
 bootstrapStorage();
 })();
 </script>
