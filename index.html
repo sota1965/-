@@ -855,7 +855,7 @@ button{font-family:inherit;}
 .diag-box{
   background:var(--panel-bg);border-radius:12px;
   width:100%;max-width:440px;max-height:80vh;
-  display:flex;flex-direction:column;overflow:hidden;
+  display:flex;flex-direction:column;overflow-y:auto;
   box-shadow:var(--shadow);
 }
 .diag-head{
@@ -881,7 +881,8 @@ button{font-family:inherit;}
 }
 .diag-backup-label{font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;}
 #diag-export, #diag-import, #diag-compress, #diag-diff-export,
-#diag-export-file, #diag-diff-file-export, #diag-import-file{
+#diag-export-file, #diag-diff-file-export, #diag-import-file,
+#drive-link-btn, #drive-sync-btn, #drive-unlink-btn{
   width:100%;padding:9px;border-radius:8px;margin-top:6px;
   border:1px solid var(--danger);background:transparent;color:var(--danger);
   font-size:13px;font-weight:700;cursor:pointer;
@@ -1043,6 +1044,13 @@ input[type=text],input[type=number],input[type=date],.field-group textarea,.fiel
       <span>診断情報</span>
       <button id="diag-close" type="button">✕</button>
     </div>
+    <div class="diag-backup-section">
+      <div class="diag-backup-label">☁️ Googleドライブ自動同期（端末間で自動で揃える）</div>
+      <div id="drive-sync-status" style="font-size:12px;opacity:.85;margin:2px 0 6px;">未連携</div>
+      <button id="drive-link-btn" type="button">🔗 ドライブと連携する</button>
+      <button id="drive-sync-btn" type="button">🔄 今すぐ同期</button>
+      <button id="drive-unlink-btn" type="button">連携を切る</button>
+    </div>
     <pre id="diag-text"></pre>
     <button id="diag-force" type="button">強制的に再描画する</button>
     <button id="diag-copy" type="button">コピー</button>
@@ -1059,13 +1067,6 @@ input[type=text],input[type=number],input[type=date],.field-group textarea,.fiel
       <button id="diag-diff-file-export" type="button">📁 差分をファイルで書き出し</button>
       <button id="diag-import-file" type="button">📁 ファイルから読み込み</button>
       <input type="file" id="import-file-input" accept=".json,application/json" class="sr-only">
-    </div>
-    <div class="diag-backup-section">
-      <div class="diag-backup-label">☁️ Googleドライブ自動同期（端末間で自動で揃える）</div>
-      <div id="drive-sync-status" style="font-size:12px;opacity:.85;margin:2px 0 6px;">未連携</div>
-      <button id="drive-link-btn" type="button">🔗 ドライブと連携する</button>
-      <button id="drive-sync-btn" type="button">🔄 今すぐ同期</button>
-      <button id="drive-unlink-btn" type="button">連携を切る</button>
     </div>
   </div>
 </div>
