@@ -36,6 +36,7 @@
   --accent-treatment:#5B9BC4;
   --accent-memo:#6EA8FF;
   --accent-kb:#5FC98B;
+  --accent-disease:#C2537E;
 
   --danger:#D8402F;
 }
@@ -65,6 +66,7 @@
     --accent-treatment:#5B9BC4;
     --accent-memo:#6EA8FF;
     --accent-kb:#5FC98B;
+  --accent-disease:#C2537E;
   }
 }
 :root[data-theme="dark"]{
@@ -90,6 +92,7 @@
   --accent-category:#9AA3AC;
   --accent-training:#5FAF63;
   --accent-treatment:#5B9BC4;
+  --accent-disease:#C2537E;
 }
 
 *{box-sizing:border-box;}
@@ -567,6 +570,7 @@ button{font-family:inherit;}
   resize:vertical;
 }
 .field-group textarea{min-height:76px;line-height:1.55;overflow-y:hidden;}
+.req-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;letter-spacing:.04em;vertical-align:2px;}
 .field-group input:focus,.field-group textarea:focus,.field-group select:focus{
   outline:2px solid var(--type-color,var(--accent-movement));outline-offset:1px;
 }
@@ -1110,6 +1114,7 @@ var TYPE_META = {
   note:       { label:'メモ',         cssVar:'--accent-note' },
   trainingMethod:  { label:'練習法', cssVar:'--accent-training' },
   treatmentMethod: { label:'治療法', cssVar:'--accent-treatment' },
+  diseaseInfo: { label:'疾患', cssVar:'--accent-disease' },
   classification:  { label:'分類',   cssVar:'--accent-physiology' },
   learningMemo: { label:'学びメモ', cssVar:'--accent-memo' },
   kbDisease:    { label:'疾患',     cssVar:'--accent-kb' },
@@ -1133,6 +1138,16 @@ var TREATMENT_FIELD_DEFS = [
   { key:'treatmentEffect',    label:'効果' },
   { key:'treatmentCaution',   label:'注意点' },
   { key:'treatmentSource',    label:'出典元・指導者' }
+];
+var DISEASE_FIELD_DEFS = [
+  { key:'diseaseOverview',     label:'概要' },
+  { key:'diseaseMechanism',    label:'病態・機序' },
+  { key:'diseaseSymptoms',     label:'主な症状・所見' },
+  { key:'diseaseDifferential', label:'鑑別の決め手' },
+  { key:'diseasePattern',      label:'東洋医学的な証分け' },
+  { key:'diseaseRedFlags',     label:'レッドフラッグ・受診の目安', required:true },
+  { key:'diseaseAcuNote',      label:'鍼灸の適応と注意' },
+  { key:'diseaseSource',       label:'根拠（教科書・論文）' }
 ];
 var TYPE_ORDER = MOVEMENT_TYPES.concat(DETAIL_TYPES).concat(['classification']);
 
@@ -1161,7 +1176,7 @@ var LEVEL_LABEL = {
 };
 var BRANCH_CONTENT_TYPES = {
   competitive: MOVEMENT_TYPES,
-  general: ['classification'],
+  general: ['classification','diseaseInfo'],
   training: ['trainingMethod'],
   treatment: ['treatmentMethod']
 };
@@ -1933,6 +1948,9 @@ function matchesSearch(node){
   var haystack = [
     node.title||'', node.note||'',
     node.causeText||'', node.effectText||'', node.correctionText||'',
+    node.treatmentSite||'', node.treatmentMethodText||'', node.treatmentEffect||'', node.treatmentSource||'',
+    node.diseaseOverview||'', node.diseaseMechanism||'', node.diseaseSymptoms||'', node.diseaseDifferential||'',
+    node.diseasePattern||'', node.diseaseRedFlags||'', node.diseaseAcuNote||'', node.diseaseSource||'',
     (node.tags||[]).join(' ')
   ].join(' ').toLowerCase();
   return keywords.every(function(k){ return haystack.indexOf(k) !== -1; });
@@ -2204,6 +2222,7 @@ function renderPanelContent(node){
     var sameFamily = MOVEMENT_TYPES.indexOf(node.type) !== -1 ? MOVEMENT_TYPES
       : node.type === 'trainingMethod' ? ['trainingMethod']
       : node.type === 'treatmentMethod' ? ['treatmentMethod']
+      : node.type === 'diseaseInfo' ? ['diseaseInfo']
       : node.type === 'classification' ? ['classification']
       : DETAIL_TYPES;
     sameFamily.forEach(function(t){
@@ -2245,7 +2264,7 @@ function renderPanelContent(node){
   }
 
   // note
-  if((!isCategory || !isRoot) && node.type !== 'treatmentMethod'){
+  if((!isCategory || !isRoot) && node.type !== 'treatmentMethod' && node.type !== 'diseaseInfo'){
     var noteGroup = el('div','field-group');
     var noteLabel = el('label');
     noteLabel.textContent = node.type==='anatomy' ? '解剖学的な内容' : node.type==='physiology' ? '生理学的な内容' : node.type==='effect' ? '影響の内容' : node.type==='trainingMethod' ? 'やり方・手順' : (MOVEMENT_TYPES.indexOf(node.type)!==-1 ? '動作の説明' : (isCategory ? '補足メモ' : '詳細メモ'));
@@ -2272,6 +2291,30 @@ function renderPanelContent(node){
       }
       ta.value = initial || '';
       ta.placeholder = fd.label + 'を記録';
+      ta.readOnly = !editMode;
+      ta.addEventListener('input', function(k, area){
+        return function(){ debouncedUpdate(node.id, k, area.value); autoGrow(area); };
+      }(fd.key, ta));
+      fg.appendChild(lbl); fg.appendChild(ta);
+      body.appendChild(fg);
+      autoGrow(ta);
+    });
+  }
+
+  // disease pages get dedicated structured fields instead of one free note
+  if(node.type === 'diseaseInfo'){
+    DISEASE_FIELD_DEFS.forEach(function(fd){
+      var fg = el('div','field-group');
+      var lbl = el('label'); lbl.textContent = fd.label;
+      if(fd.required){
+        lbl.style.color = 'var(--danger)';
+        var badge = el('span','req-badge'); badge.textContent = '必須';
+        lbl.appendChild(badge);
+      }
+      var ta = el('textarea');
+      ta.value = node[fd.key] || '';
+      ta.placeholder = fd.label + 'を記録';
+      if(fd.required) ta.style.borderLeft = '3px solid var(--danger)';
       ta.readOnly = !editMode;
       ta.addEventListener('input', function(k, area){
         return function(){ debouncedUpdate(node.id, k, area.value); autoGrow(area); };
@@ -2609,14 +2652,14 @@ function renderPanelContent(node){
     return group;
   }
 
-  if(MOVEMENT_TYPES.indexOf(node.type) !== -1 || node.type === 'classification' || isInjuryCategory){
+  if(MOVEMENT_TYPES.indexOf(node.type) !== -1 || node.type === 'classification' || node.type === 'diseaseInfo' || isInjuryCategory){
     [buildRelatedGroup('関連する練習法・ドリル', ['trainingMethod'], '練習法'),
      buildRelatedGroup('関連する治療法', ['treatmentMethod'], '治療法'),
      buildRelatedGroup('関連する学びメモ・基礎', ['learningMemo'].concat(KB_TYPES), null),
-     buildRelatedGroup('その他の関連ページ', TYPE_ORDER.filter(function(t){ return t!=='trainingMethod' && t!=='treatmentMethod'; }), null)
+     buildRelatedGroup('その他の関連ページ', TYPE_ORDER.concat(['diseaseInfo']).filter(function(t){ return t!=='trainingMethod' && t!=='treatmentMethod'; }), null)
     ].forEach(function(g){ if(g) body.appendChild(g); });
   } else {
-    var g = buildRelatedGroup('関連ページ', TYPE_ORDER.concat(['trainingMethod','treatmentMethod']), null);
+    var g = buildRelatedGroup('関連ページ', TYPE_ORDER.concat(['trainingMethod','treatmentMethod','diseaseInfo']), null);
     if(g) body.appendChild(g);
     var gKb = buildRelatedGroup('関連する学びメモ・基礎', ['learningMemo'].concat(KB_TYPES), null);
     if(gKb) body.appendChild(gKb);
@@ -2638,15 +2681,35 @@ function renderPanelContent(node){
     var cancelBtn = el('button','cancel'); cancelBtn.type='button'; cancelBtn.textContent='キャンセル';
     inlineForm.appendChild(inlineInput); inlineForm.appendChild(confirmBtn); inlineForm.appendChild(cancelBtn);
     var pendingType = null;
+    var pendingCategory = false;
 
     if(step.kind === 'category'){
       var cb = el('button','add-child-btn'); cb.type='button';
       cb.style.setProperty('--btn-color', 'var(' + CATEGORY_CSS_VAR + ')');
       cb.textContent = '＋ ' + LEVEL_LABEL[step.level] + 'を追加';
       cb.addEventListener('click', function(){
+        pendingCategory = true; pendingType = null;
         inlineForm.classList.add('show'); inlineInput.value=''; inlineInput.focus();
       });
       addRow.appendChild(cb);
+      // disease pages can also live directly under a 部位 category (e.g. 内科・全身),
+      // not only under a 疾患 sub-category
+      if(node.category === 'general' && node.catLevel === 'bodypart'){
+        (BRANCH_CONTENT_TYPES.general || []).forEach(function(t){
+          var b2 = el('button','add-child-btn'); b2.type='button';
+          b2.style.setProperty('--btn-color', 'var(' + TYPE_META[t].cssVar + ')');
+          b2.textContent = '＋ ' + TYPE_META[t].label;
+          b2.addEventListener('click', function(tt){
+            return function(){
+              pendingCategory = false; pendingType = tt;
+              inlineForm.classList.add('show');
+              inlineInput.value = '';
+              inlineInput.focus();
+            };
+          }(t));
+          addRow.appendChild(b2);
+        });
+      }
     } else {
       childChoices.forEach(function(t){
         var b = el('button','add-child-btn'); b.type='button';
@@ -2667,7 +2730,7 @@ function renderPanelContent(node){
       var title = inlineInput.value.trim();
       if(!title) return;
       var ref;
-      if(step.kind === 'category'){
+      if(step.kind === 'category' && pendingCategory){
         ref = await createCategoryNode(node.id, node.category, step.level, title);
       } else {
         if(!pendingType) return;
@@ -3302,6 +3365,10 @@ function renderListView(){
 
   if(listAggregateId){
     renderAggregateList(listAggregateId);
+  } else if(branch === 'general' && listState.path.length === 1 && listState.path[0] && !(listState.path.length >= chain.length && listState.path[chain.length-1])){
+    // content placed directly under a 部位 category (e.g. 内科・全身) is listed here;
+    // selecting a sub-category below still drills into that category as before
+    renderContentList(listState.path[0]);
   } else if(parentId && listState.path.length >= chain.length && (chain.length === 0 || listState.path[chain.length-1])){
     var leafId = chain.length === 0 ? ROOT_IDS[branch] : listState.path[chain.length-1];
     if((BRANCH_CONTENT_TYPES[branch]||[]).length === 0){
